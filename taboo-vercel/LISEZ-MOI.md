@@ -66,10 +66,18 @@ C'est la cause n°1 de « ça renvoie 503 ».
 
 ```bash
 node genere_liens.mjs \
-  --secret "<le secret>" \
-  --url "https://ton-projet.vercel.app" \
-  patron amadou kso
+  --secret "$(cat .acces_secret)" \
+  --url "https://taboo-vercel.vercel.app" \
+  --version 2 \
+  lad@saphircapital.com kso@saphircapital.com
 ```
+
+L'adresse e-mail sert d'identifiant : les journaux Vercel affichent
+`acces autorise · lad@saphircapital.com`, et non un surnom à traduire.
+
+`--version` doit correspondre à la variable `ACCES_VERSION` sur Vercel —
+actuellement **2**. Un décalage entre les deux refuse tous les liens, sans
+message explicite sur la cause.
 
 Chacun reçoit **son** lien. Il le met en favori, et n'a plus rien à faire :
 aucun mot de passe à retenir, aucun à changer.
@@ -117,7 +125,7 @@ et de `ACCES_VERSION`.
 vercel env rm ACCES_VERSION production
 vercel env add ACCES_VERSION production    # saisis : 2
 vercel --prod
-node genere_liens.mjs --secret "<secret>" --url "<url>" --version 2 patron amadou
+node genere_liens.mjs --secret "$(cat .acces_secret)" --url "$U" --version 3 lad@saphircapital.com kso@saphircapital.com
 ```
 
 Les anciens liens cessent immédiatement de fonctionner.
