@@ -1,0 +1,7 @@
+{
+  "name": "taboo-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Tableau de bord TABOO, protege par middleware cote serveur",
+  "license": "UNLICENSED"
+}

@@ -84,3 +84,13 @@ taboo-serverless/config.env
 valeurs_controle.json
 taboo-serverless/valeurs_controle.json
 *.instancie.sql
+
+# Dossier de deploiement Cloudflare Pages : contient le dashboard assemble,
+# donc les donnees. A glisser dans Pages, jamais a versionner.
+taboo-site/
+
+# Projet Vercel : index.html y contient les donnees. Le code de controle
+# d'acces est versionnable, le tableau de bord non (son propre .gitignore
+# l'exclut deja).
+taboo-vercel/index.html
+taboo-vercel/.vercel
