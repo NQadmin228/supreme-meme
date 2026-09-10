@@ -1,6 +1,0 @@
-<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<title>Test</title></head><body>
-<h1>MARQUEUR_TEST_MIDDLEWARE_9f3a</h1>
-<p>Fichier factice servant a verifier que le controle d'acces intercepte
-bien les actifs statiques en production. Aucune donnee.</p>
-</body></html>
