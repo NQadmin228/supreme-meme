@@ -156,18 +156,10 @@ CDN de Chart.js. Sans `ACCES_SECRET`, rien n'est servi.
   qui la rend inoffensive, pas son obscurité.
 
 **L'alternative plus solide, également gratuite** : Cloudflare Access avec
-connexion par compte Google — le patron utilise le compte
-`@saphircapital.com` qu'il ouvre déjà chaque matin, et il n'y a aucun jeton à
-transporter. Elle exige un nom de domaine dans un compte Cloudflare. La
-procédure est dans `../HEBERGEMENT_CLOUDFLARE.md`.
-
----
-
-## À ne pas oublier
-
-Le Worker `summer-glitter-7f11.empty-sky-b5c7.workers.dev` sert encore le
-tableau de bord **sans aucune protection**. Coupe sa route `workers.dev` ou
-supprime-le : `dash.cloudflare.com` → Workers & Pages → le Worker → Settings.
+connexion par compte Google — le patron utiliserait le compte
+`@saphircapital.com` qu'il ouvre déjà chaque matin, et il n'y aurait aucun jeton
+à transporter. Elle exige un nom de domaine dans un compte Cloudflare, ce qui a
+fait écarter cette voie.
 
 ---
 
