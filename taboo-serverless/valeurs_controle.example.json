@@ -1,0 +1,32 @@
+{
+  "_lisez_moi": [
+    "Totaux attendus de VOTRE jeu de donnees, pour verifier qu'un deploiement",
+    "reproduit les bons chiffres. Copier en valeurs_controle.json, qui est",
+    "exclu du depot.",
+    "",
+    "Ces valeurs ne sont PAS utilisees par la chaine : les invariants de",
+    "snapshot_builder/invariants.py sont structurels et vrais pour tout",
+    "export. C'est precisement pourquoi ils n'ont pas besoin d'etre mis a",
+    "jour a chaque nouvel export -- contrairement aux assert de la premiere",
+    "chaine, qui echouaient tous des qu'une vente s'ajoutait.",
+    "",
+    "Ce fichier sert au controle HUMAIN, une fois, apres un deploiement ou",
+    "une modification de vue."
+  ],
+  "periode": { "debut": "AAAA-MM-JJ", "fin": "AAAA-MM-JJ", "nuits": 0 },
+  "compte_de_resultat": {
+    "ca_brut": 0, "remises": 0, "ca_net": 0,
+    "achats_externes": 0, "marge_brute": 0,
+    "opex": 0, "resultat_exploitation": 0,
+    "capex": 0, "resultat_net": 0
+  },
+  "taux_attendus_pct": {
+    "marge_brute": 0.0, "resultat_exploitation": 0.0, "resultat_net": 0.0
+  },
+  "correctif_full_outer_join": {
+    "_note": "Couples (jour, activite) ayant un achat sans vente. Ils doivent apparaitre dans v_resultat_jour APRES le correctif 12_fix_v_resultat_jour.sql, avec ca_net = 0.",
+    "nb_couples_attendus": 7,
+    "achats_recuperes": 0
+  },
+  "totaux_pos": { "nb_panier": 0, "panier_moyen": 0 }
+}

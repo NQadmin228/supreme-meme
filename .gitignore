@@ -1,0 +1,86 @@
+# =====================================================================
+# DONNEES D'EXPLOITATION — ne doivent JAMAIS entrer dans le depot
+# =====================================================================
+# Ces fichiers contiennent le compte de resultat complet de TABOO : CA,
+# marges, detail par article, performance par caissier. Un depot Git
+# conserve l'historique : un fichier pousse une fois par erreur reste
+# recuperable meme apres suppression, et un depot public est indexe et
+# clone. On les exclut par defaut plutot que de compter sur la vigilance
+# a chaque commit.
+#
+# Le code se reconstruit ; ces donnees ne se depublient pas.
+
+data.json
+data_v2.json
+instantanes/
+*.json.br
+
+# Tableaux de bord assembles : les donnees y sont EMBARQUEES (5 Mo).
+dashboard.html
+dashboard_v2.html
+taboo-serverless/web/dist/
+
+# Exports POS et referentiels, si jamais on les copie ici
+*.csv
+!exemples/*.csv
+sources/
+referentiel/
+
+# Classeurs et documents de travail
+*.xlsx
+*.xls
+*.docx
+*.pdf
+
+# =====================================================================
+# TECHNIQUE
+# =====================================================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Identifiants GCP. Un compte de service pousse sur GitHub est detecte
+# et exploite en quelques minutes.
+*-key.json
+*credentials*.json
+service-account*.json
+.env
+.env.*
+!.env.example
+
+# Etat Terraform : contient les valeurs de sortie et parfois des secrets.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# Local
+.claude/
+.DS_Store
+Thumbs.db
+*.log
+
+# =====================================================================
+# VERSION 1 — conservee sur disque, hors du depot
+# =====================================================================
+# Supersedee par la chaine v2. Elle porte deux choses qui n'ont rien a
+# faire dans un depot public : des montants exacts figes dans des assert,
+# et le prenom d'un caissier dans un commentaire de page.
+# Les fichiers restent en local, ils ne sont simplement pas publies.
+13_extraction_donnees.py
+14_assembler.py
+dashboard_template.html
+dashboard_pages.html
+dashboard_render.js
+
+# Instanciation locale : identifiants d'infrastructure et valeurs de
+# controle. Les .example.* correspondants sont versionnes.
+config.env
+taboo-serverless/config.env
+valeurs_controle.json
+taboo-serverless/valeurs_controle.json
+*.instancie.sql

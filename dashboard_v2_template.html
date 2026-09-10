@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TABOO — Tableau de bord de direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* =====================================================================
+   PALETTE
+   ---------------------------------------------------------------------
+   Les couleurs de SERIE ne sont pas choisies a l'oeil : le triplet
+   DRINK / EAT / SMOKE a ete valide par le validateur de palette sur le
+   fond reel de ce dashboard (#12211F), en mode "toutes paires".
+     retenu   #199e70 / #d95926 / #9085e9
+     ecarte   #3E8E86 / #C9A227 / #C08FD8  (l'ancien triplet : hors bande
+              de luminosite, teal sous le plancher de chroma, et surtout
+              separation tritan de 5,7 seulement — un daltonien tritan ne
+              distinguait pas DRINK de EAT)
+   Le triplet retenu passe toutes les paires : CVD 9,4 · normal 24,6 ·
+   tritan 9,4 · contraste >= 3:1.
+
+   Il n'y a AUCUN or dans la marque. La premiere version en supposait
+   un (#C9A227), sur la foi d'un vert foret egalement suppose. Le logo
+   reel est blanc sur #004F5E : bleu-vert petrole, teinte 190 degres.
+   L'accent d'interface est donc un cyan clair (#7FD9E8), et le
+   graphique dispose de deux teintes distinctes selon l'usage --
+   --accent-mark pour une serie unique, --compare pour la seconde
+   serie d'une comparaison.
+
+   Les couleurs de STATUT sont reservees et ne servent jamais de serie.
+   Elles sont toujours accompagnees d'un libelle, jamais seules.
+   ===================================================================== */
+:root{
+  /* =========================================================
+     SURFACES — derivees de la couleur exacte du logo
+     ---------------------------------------------------------
+     Le logo TABOO est blanc sur #004F5E : un bleu-vert petrole,
+     teinte 190 degres, saturation 100 %, luminosite 18 %. Toutes
+     les surfaces descendent de cette teinte, ce qui donne une
+     interface qui appartient visiblement a la marque plutot que
+     de s'en approcher.
+
+     La version precedente supposait un vert foret (#0B1615) et un
+     accent or (#C9A227). Les deux etaient faux : la marque ne
+     contient aucun or, et sa teinte est nettement plus bleue.
+     ========================================================= */
+  --brand:#004F5E;        /* la couleur du logo, a l'octet pres */
+  --bg:#001A20;
+  --surface:#002A33;
+  --surface2:#00363F;
+  --surface3:#00444F;
+  --line:#0A5666;         /* filets et separateurs */
+  --line-strong:#2C8598;  /* bordures interactives — 3,56:1 sur --surface */
+
+  /* --- encre : le logo est blanc pur, l'interface le suit --- */
+  --ink:#FFFFFF;          /* 15,2:1 sur --surface */
+  --ink-dim:#9EC4CC;      /*  8,1:1 */
+  --ink-faint:#6E939B;    /*  4,6:1 — jamais sur --brand, ou il tombe a 2,8:1 */
+
+  /* --- accents d'interface --- */
+  --accent:#7FD9E8;       /* nav active, valeurs vedettes — 9,4:1 */
+  --accent-mark:#0FA3BF;  /* marques de graphique a serie unique.
+                             Passe la bande de luminosite ET le plancher
+                             de chroma, ce que --accent ne fait pas :
+                             trop clair pour une marque de donnees. */
+  --compare:#c98500;      /* 2e serie d'une comparaison. Valide face au
+                             bleu sequentiel : CVD 27,4 · normal 30,7.
+                             Un cyan de marque y serait indistinguable
+                             du bleu voisin. */
+
+  /* --- series categorielles (ordre fixe, jamais cycle) ---
+     Inchangees, et revalidees sur le NOUVEAU fond #002A33 en mode
+     toutes paires : CVD 9,4 · normal 24,6 · tritan 9,4 · contraste
+     >= 3:1. C'est le seul triplet teste qui tienne aussi la
+     separation tritan. */
+  --s-drink:#199e70; --s-eat:#d95926; --s-smoke:#9085e9;
+  --s-drink-soft:rgba(25,158,112,.22);
+  --s-eat-soft:rgba(217,89,38,.22);
+  --s-smoke-soft:rgba(144,133,233,.22);
+
+  /* --- statut (reserve, jamais serie) — tous >= 3:1 sur --surface --- */
+  --st-good:#0ca30c; --st-warn:#fab219; --st-serious:#ec835a; --st-crit:#d03b3b;
+
+  /* --- rampe sequentielle : une seule teinte, sombre -> clair ---
+     Bleu et non cyan : une rampe cyan sur un fond bleu-vert verrait
+     ses premiers pas se fondre dans la surface. */
+  --seq-1:#184f95; --seq-2:#1c5cab; --seq-3:#256abf; --seq-4:#2a78d6;
+  --seq-5:#3987e5; --seq-6:#5598e7; --seq-7:#86b6ef; --seq-8:#b7d3f6;
+
+  /* --- chrome de graphique --- */
+  --grid:#0A3A45; --axis:#12505F;
+  --radius:4px;
+  /* Jost : geometrique, O circulaires, proche des lettres du logo.
+     Reserve a la marque et aux titres. Les chiffres et les
+     graphiques restent en Inter, plus lisible en petit corps. */
+  --font-display:'Jost',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font-body);
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+/* tabular-nums reserve aux colonnes qui doivent s'aligner verticalement */
+.tab,td.num,th.num,.axis-like{font-variant-numeric:tabular-nums;}
+a{color:var(--s-drink);}
+
+/* ---------- Layout ---------- */
+.shell{display:flex; min-height:100vh;}
+.sidebar{
+  width:266px; flex:none; background:var(--surface);
+  border-right:1px solid var(--line); padding:22px 0;
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+}
+.brand{background:var(--brand); padding:18px 20px 16px;
+  border-bottom:1px solid var(--line); margin-bottom:14px; text-align:center;}
+.brand img{display:block; width:118px; height:118px; margin:0 auto 2px;
+  /* Le JPEG a le meme fond que le bloc : aucune bordure ni coin
+     arrondi, sinon la jointure devient visible. */
+  border:0;}
+.brand-sub{font-size:10.5px; color:#B8DCE3; margin-top:6px; line-height:1.45;
+  letter-spacing:.4px;}
+/* Sur --brand, --ink-faint ne fait que 2,8:1 : on eclaircit. */
+.nav-group-label{padding:14px 20px 6px; font-size:10.5px; color:var(--ink-faint);
+  font-weight:600; letter-spacing:.6px; text-transform:uppercase;}
+.nav-item{display:flex; align-items:center; gap:7px; padding:9px 18px 9px 22px;
+  color:var(--ink-dim); text-decoration:none; font-size:13.5px;
+  border-left:2px solid transparent; cursor:pointer; transition:background .12s,color .12s;}
+.nav-item:hover{background:var(--surface2); color:var(--ink);}
+.nav-item.active{color:var(--ink); border-left-color:var(--accent);
+  background:var(--surface2); font-weight:500;}
+.nav-item .dot{width:6px; height:6px; border-radius:50%; flex:none;}
+.nav-item .dot.warn{background:var(--st-warn);}
+.nav-item .dot.crit{background:var(--st-crit);}
+.nav-item .dot.new{background:var(--s-drink);}
+
+.main{flex:1; min-width:0;}
+.topbar{position:sticky; top:0; z-index:20; background:rgba(11,22,21,.94);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+  padding:14px 30px; display:flex; align-items:flex-end;
+  justify-content:space-between; gap:20px; flex-wrap:wrap;}
+.page-title{font-family:var(--font-display); font-size:27px; font-weight:500;
+  line-height:1.15; letter-spacing:1.2px; text-transform:uppercase;}
+.page-sub{font-size:12.5px; color:var(--ink-faint); margin-top:3px;}
+
+/* ---------- Filtre de periode : une seule rangee, au-dessus des graphiques ---------- */
+.filters{display:flex; align-items:center; gap:7px; font-size:12.5px; flex-wrap:wrap;}
+.filters input[type=date]{background:var(--surface2); border:1px solid var(--line);
+  color:var(--ink); padding:6px 9px; border-radius:var(--radius);
+  font-family:var(--font-body); font-size:12.5px; color-scheme:dark;}
+.btn{background:var(--surface2); border:1px solid var(--line); color:var(--ink-dim);
+  padding:6px 11px; border-radius:var(--radius); cursor:pointer; font-size:12.5px;
+  font-family:var(--font-body); transition:border-color .12s,color .12s,background .12s;}
+.btn:hover{border-color:var(--s-drink); color:var(--ink);}
+.btn.on{background:var(--surface3); border-color:var(--accent); color:var(--ink); font-weight:500;}
+.btn.primary{background:#1d4f47; border-color:var(--s-drink); color:var(--ink);}
+.btn.primary:hover{background:#236055;}
+.filters.off{opacity:.35; pointer-events:none;}
+.filter-note{font-size:11.5px; color:var(--ink-faint);}
+
+.content{padding:24px 30px 90px;}
+.page{display:none;}
+.page.active{display:block;}
+
+/* ---------- Bandeaux ---------- */
+.note{border:1px solid var(--line); border-left:3px solid var(--accent);
+  background:var(--surface); padding:12px 15px; border-radius:var(--radius);
+  font-size:13px; color:var(--ink-dim); margin-bottom:18px; line-height:1.6;}
+.note strong{color:var(--ink);}
+.note.crit{border-left-color:var(--st-crit);}
+.note.warn{border-left-color:var(--st-warn);}
+.note.good{border-left-color:var(--st-good);}
+.note.info{border-left-color:var(--seq-5);}
+.note-title{display:flex; align-items:center; gap:7px; color:var(--ink);
+  font-weight:600; font-size:13px; margin-bottom:5px;}
+
+/* ---------- Grilles & cartes ---------- */
+.grid{display:grid; gap:14px; margin-bottom:20px;}
+.g4{grid-template-columns:repeat(4,1fr);}
+.g3{grid-template-columns:repeat(3,1fr);}
+.g2{grid-template-columns:repeat(2,1fr);}
+.g21{grid-template-columns:2fr 1fr;}
+.g12{grid-template-columns:1fr 2fr;}
+@media(max-width:1240px){.g4{grid-template-columns:repeat(2,1fr);}
+  .g3,.g21,.g12{grid-template-columns:1fr;}}
+@media(max-width:760px){.g4,.g3,.g2{grid-template-columns:1fr;}}
+
+/* ---------- Navigation sur petit ecran ----------
+   La barre laterale etait simplement masquee sous 760px : le visiteur
+   arrivait sur la Synthese et n'avait plus AUCUN moyen d'atteindre les
+   onze autres pages. Elle devient un bandeau horizontal defilant. */
+@media(max-width:760px){
+  .shell{flex-direction:column;}
+  .sidebar{width:100%; height:auto; position:sticky; top:0; z-index:30;
+    display:flex; flex-wrap:nowrap; align-items:center; gap:0;
+    overflow-x:auto; overflow-y:hidden; padding:0 6px;
+    border-right:none; border-bottom:1px solid var(--line);
+    -webkit-overflow-scrolling:touch;}
+  .sidebar .brand{display:none;}
+  .sidebar .nav-group-label{display:none;}
+  .nav-item{white-space:nowrap; flex:none; padding:13px 13px;
+    border-left:none; border-bottom:2px solid transparent; font-size:13px;}
+  .nav-item.active{border-left:none; border-bottom-color:var(--accent);}
+  .topbar{position:static; padding:14px 16px;}
+  .content{padding:18px 16px 70px;}
+  .page-title{font-size:21px;}
+  .stat .v{font-size:24px;} .stat.hero .v{font-size:28px;}
+}
+
+.card{background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--radius); padding:16px 18px; min-width:0;}
+.card h3{margin:0 0 3px; font-family:var(--font-body); font-size:12.5px;
+  font-weight:600; color:var(--ink); letter-spacing:.1px;}
+.card .sub{font-size:11.5px; color:var(--ink-faint); margin-bottom:12px; line-height:1.45;}
+.card h3+.chart-wrap,.card h3+.tbl,.card h3+.scroll-y{margin-top:12px;}
+
+/* ---------- Tuiles de chiffre ---------- */
+.stat{background:var(--surface); border:1px solid var(--line);
+  border-left:2px solid var(--surface3); border-radius:var(--radius); padding:15px 17px;}
+.stat .k{font-size:11.5px; color:var(--ink-dim); font-weight:600; letter-spacing:.2px;}
+.stat .v{font-size:27px; font-weight:600; color:var(--ink); line-height:1.15; margin-top:7px;}
+.stat .u{font-size:13px; color:var(--ink-faint); font-weight:400; margin-left:5px;}
+.stat .d{font-size:11.5px; color:var(--ink-faint); margin-top:5px; line-height:1.4;}
+.stat.accent{border-left-color:var(--accent);} .stat.accent .v{color:var(--accent);}
+.stat.good{border-left-color:var(--st-good);}
+.stat.warn{border-left-color:var(--st-warn);}
+.stat.crit{border-left-color:var(--st-crit);} .stat.crit .v{color:var(--st-crit);}
+.stat.hero .v{font-size:34px; letter-spacing:-.3px;}
+
+/* ---------- Graphiques ---------- */
+.chart-wrap{position:relative; height:270px;}
+.chart-wrap.xs{height:170px;} .chart-wrap.s{height:210px;}
+.chart-wrap.l{height:330px;} .chart-wrap.xl{height:420px;}
+
+/* ---------- Tableaux ---------- */
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; padding:7px 9px; color:var(--ink-faint); font-weight:600;
+  font-size:11px; letter-spacing:.3px; border-bottom:1px solid var(--line);
+  background:var(--surface); position:sticky; top:0; z-index:1;}
+td{padding:7px 9px; border-bottom:1px solid var(--line-soft); color:var(--ink-dim);}
+tr:last-child td{border-bottom:none;}
+td.num,th.num{text-align:right; color:var(--ink);}
+td.strong{color:var(--ink); font-weight:500;}
+tbody tr:hover td{background:var(--surface2);}
+.scroll-y{max-height:380px; overflow-y:auto; overflow-x:auto;}
+.scroll-y.tall{max-height:560px;}
+.tbl{overflow-x:auto;}
+.rank{color:var(--ink-faint); width:26px; font-size:11px;}
+tr.total td{border-top:1px solid var(--line); color:var(--ink);
+  font-weight:600; background:var(--surface2);}
+
+/* ---------- Etiquettes ---------- */
+.pill{display:inline-flex; align-items:center; gap:5px; padding:2px 8px;
+  border-radius:20px; font-size:10.5px; font-weight:600; letter-spacing:.2px;
+  background:var(--surface2); color:var(--ink-dim); border:1px solid var(--line);
+  white-space:nowrap;}
+.pill i{width:6px; height:6px; border-radius:50%; flex:none; display:block;}
+.pill.drink i{background:var(--s-drink);} .pill.eat i{background:var(--s-eat);}
+.pill.smoke i{background:var(--s-smoke);}
+.pill.good{color:#7ede7e; border-color:#1c5e1c;} .pill.good i{background:var(--st-good);}
+.pill.warn{color:#f8d98a; border-color:#6b5312;} .pill.warn i{background:var(--st-warn);}
+.pill.serious{color:#f2b79c; border-color:#7a4530;} .pill.serious i{background:var(--st-serious);}
+.pill.crit{color:#f0a0a0; border-color:#7a2020;} .pill.crit i{background:var(--st-crit);}
+
+/* ---------- Legende (toujours presente des 2 series) ---------- */
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px;
+  color:var(--ink-dim); margin-bottom:10px;}
+.legend span{display:inline-flex; align-items:center; gap:6px;}
+.legend i{width:9px; height:9px; border-radius:2px; display:block;}
+
+/* ---------- Bascule tableau / graphique ---------- */
+.card-head{display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
+.mini{background:none; border:1px solid var(--line); color:var(--ink-faint);
+  font-size:10.5px; padding:3px 8px; border-radius:20px; cursor:pointer;
+  font-family:var(--font-body); white-space:nowrap;}
+.mini:hover{color:var(--ink); border-color:var(--ink-faint);}
+.alt-table{display:none; margin-top:12px;}
+.alt-table.on{display:block;}
+
+/* ---------- Barres en ligne (dans les tableaux) ---------- */
+.bar{height:6px; border-radius:3px; background:var(--surface3); overflow:hidden; min-width:44px;}
+.bar i{display:block; height:100%; border-radius:3px;}
+
+/* ---------- Cascade textuelle du compte de resultat ---------- */
+.casc{font-size:13px;}
+.casc .r{display:flex; align-items:baseline; gap:12px; padding:8px 0;
+  border-bottom:1px solid var(--line-soft);}
+.casc .r.tot{border-top:1px solid var(--line); border-bottom:none;
+  margin-top:3px; font-weight:600; color:var(--ink);}
+.casc .lbl{flex:1; color:var(--ink-dim);}
+.casc .r.tot .lbl{color:var(--ink);}
+.casc .amt{font-variant-numeric:tabular-nums; text-align:right; min-width:130px; color:var(--ink);}
+.casc .pc{font-variant-numeric:tabular-nums; text-align:right; min-width:62px; color:var(--ink-faint); font-size:12px;}
+.casc .neg .amt{color:var(--st-serious);}
+
+.foot{font-size:11.5px; color:var(--ink-faint); margin-top:9px; line-height:1.55;}
+.foot code{background:var(--surface2); padding:1px 5px; border-radius:2px; font-size:11px;}
+.sec{font-family:var(--font-display); font-size:19px; font-weight:500;
+  letter-spacing:.8px; text-transform:uppercase;
+  margin:30px 0 12px; padding-top:18px; border-top:1px solid var(--line);}
+.sec:first-child{margin-top:0; padding-top:0; border-top:none;}
+
+::-webkit-scrollbar{width:9px; height:9px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--surface3); border-radius:5px;}
+::-webkit-scrollbar-thumb:hover{background:#2a4442;}
+
+/* ---------- Impression (la direction imprime toujours) ---------- */
+@media print{
+  body{background:#fff; color:#000;}
+  .sidebar,.filters,.mini{display:none!important;}
+  .page{display:block!important; page-break-after:always;}
+  .card,.stat{border-color:#ccc; background:#fff;}
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="page-title" id="pageTitle">Synthèse</div>
+        <div class="page-sub" id="pageSub"></div>
+      </div>
+      <div class="filters" id="filters">
+        <button class="btn" data-preset="90">90 j</button>
+        <button class="btn" data-preset="180">6 mois</button>
+        <button class="btn" data-preset="365">12 mois</button>
+        <button class="btn on" data-preset="all">Tout</button>
+        <input type="date" id="d1"><span style="color:var(--ink-faint)">→</span><input type="date" id="d2">
+        <button class="btn primary" id="apply">Appliquer</button>
+        <span class="filter-note" id="filterNote"></span>
+      </div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<script id="taboo-data" type="application/json">__TABOO_DATA_JSON__</script>
+<script>
+const DATA = JSON.parse(document.getElementById('taboo-data').textContent);
+
+/* =====================================================================
+   COULEURS — lues depuis les variables CSS, jamais redeclarees en dur
+   ===================================================================== */
+const CSSVAR = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const ACT = ['DRINK','EAT','SMOKE'];                 // ordre FIXE, jamais cycle
+const C = {
+  DRINK: CSSVAR('--s-drink'), EAT: CSSVAR('--s-eat'), SMOKE: CSSVAR('--s-smoke'),
+  soft: {DRINK:CSSVAR('--s-drink-soft'), EAT:CSSVAR('--s-eat-soft'), SMOKE:CSSVAR('--s-smoke-soft')},
+  good:CSSVAR('--st-good'), warn:CSSVAR('--st-warn'),
+  serious:CSSVAR('--st-serious'), crit:CSSVAR('--st-crit'),
+  ink:CSSVAR('--ink'), dim:CSSVAR('--ink-dim'), faint:CSSVAR('--ink-faint'),
+  grid:CSSVAR('--grid'), axis:CSSVAR('--axis'), surface:CSSVAR('--surface'),
+  brand:CSSVAR('--brand'),
+  /* accent      : interface (nav active, valeurs vedettes)
+     accentMark  : marques de graphique a SERIE UNIQUE. --accent est trop
+                   clair pour porter de la donnee : il sort de la bande de
+                   luminosite et se lit mal comme surface pleine.
+     compare     : 2e serie d'une comparaison. Valide face au bleu
+                   sequentiel a CVD 27,4 / normal 30,7 ; un cyan de marque
+                   y serait indistinguable du bleu voisin. */
+  accent:CSSVAR('--accent'),
+  accentMark:CSSVAR('--accent-mark'),
+  compare:CSSVAR('--compare'),
+  seq:[1,2,3,4,5,6,7,8].map(i=>CSSVAR('--seq-'+i)),
+};
+
+/* =====================================================================
+   FORMATAGE
+   ---------------------------------------------------------------------
+   Les montants sont en francs CFA et atteignent le milliard. Ecrits en
+   entier sur un axe, ils mangent la moitie de la largeur utile et se
+   chevauchent. Sur les AXES on abrege (1,04 Md · 687 M) ; dans les
+   TABLEAUX et les tuiles on garde le chiffre exact, aligne.
+   ===================================================================== */
+const NF = new Intl.NumberFormat('fr-FR');
+const NF1 = new Intl.NumberFormat('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
+const NF2 = new Intl.NumberFormat('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const F  = n => NF.format(Math.round(n||0));
+const F1 = n => NF1.format(n||0);
+const F2 = n => NF2.format(n||0);
+const PCT = (a,b) => b ? (100*a/b) : 0;
+const P1 = (a,b) => F1(PCT(a,b))+' %';
+
+function Fc(n){                                    // format compact pour axes
+  n = n||0; const a = Math.abs(n);
+  if(a >= 1e9) return NF2.format(n/1e9)+' Md';
+  if(a >= 1e6) return NF.format(Math.round(n/1e6))+' M';
+  if(a >= 1e4) return NF.format(Math.round(n/1e3))+' k';
+  return NF.format(Math.round(n));
+}
+const FCFA = n => F(n)+' F';
+
+/* =====================================================================
+   AGREGATION
+   ===================================================================== */
+function sum(rows,k){ let s=0; for(const r of rows) s += (r[k]||0); return s; }
+function sums(rows,keys){
+  const o = {}; for(const k of keys) o[k]=0;
+  for(const r of rows) for(const k of keys) o[k] += (r[k]||0);
+  return o;
+}
+function groupBy(rows,keyFn,sumKeys){
+  const m = new Map();
+  for(const r of rows){
+    const k = keyFn(r);
+    if(k===undefined||k===null) continue;
+    let acc = m.get(k);
+    if(!acc){ acc = {}; for(const sk of sumKeys) acc[sk]=0; m.set(k,acc); }
+    for(const sk of sumKeys) acc[sk] += (r[sk]||0);
+  }
+  return m;
+}
+const inRange = (rows,a,b) => rows.filter(r => r.d>=a && r.d<=b);
+
+/* =====================================================================
+   CALENDRIER
+   ===================================================================== */
+const JOURS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+const MOIS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const dOf = s => new Date(s+'T00:00:00');
+const jourNum = s => (dOf(s).getDay()+6)%7;          // 0 = lundi
+const moisKey = s => s.slice(0,7);
+const moisLabel = s => MOIS[dOf(s).getMonth()]+' '+dOf(s).getFullYear().toString().slice(2);
+const dateLabel = s => dOf(s).getDate()+' '+MOIS[dOf(s).getMonth()]+' '+dOf(s).getFullYear();
+// L'axe horaire suit ordre_nuit (14h -> 13h) : trier sur l'heure brute
+// placerait minuit, qui est le pic d'activite, a l'extreme gauche et
+// couperait la soiree en deux.
+const HEURES_NUIT = Array.from({length:24},(_,i)=>(i+14)%24);
+
+/* =====================================================================
+   ETAT
+   ===================================================================== */
+const state = {
+  page:'synthese',
+  start:DATA.meta.periode_debut,
+  end:DATA.meta.periode_fin,
+  preset:'all',
+};
+const charts = {};
+
+/* =====================================================================
+   SOCLE CHART.JS
+   ---------------------------------------------------------------------
+   Regles appliquees partout :
+     - marques fines, extremites arrondies a 4px ancrees a la ligne de base
+     - lignes 2px, points >= 8px au survol
+     - 2px de fond entre segments empiles et barres adjacentes
+     - grille et axes recessifs
+     - infobulle au survol par defaut (un graphique HTML est interactif)
+     - JAMAIS deux echelles Y sur un meme graphique
+   ===================================================================== */
+if(window.Chart){
+  Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
+  Chart.defaults.font.size = 11.5;
+  Chart.defaults.color = C.faint;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.animation.duration = 320;
+}
+
+const TOOLTIP = {
+  backgroundColor:'#0d1a19', borderColor:C.axis, borderWidth:1,
+  titleColor:C.ink, bodyColor:C.dim, padding:10, cornerRadius:4,
+  displayColors:true, boxWidth:9, boxHeight:9, boxPadding:4,
+  titleFont:{weight:'600',size:12}, bodyFont:{size:11.5},
+};
+
+function axisY(fmt){
+  return {grid:{color:C.grid,drawTicks:false}, border:{display:false},
+          ticks:{color:C.faint, padding:7, callback:v=>(fmt||Fc)(v)}};
+}
+function axisX(opts){
+  return Object.assign({grid:{display:false}, border:{color:C.axis},
+                        ticks:{color:C.faint, maxRotation:0, autoSkipPadding:14}}, opts||{});
+}
+// legende Chart.js : presente des 2 series, jamais pour une seule
+function legendTop(show){
+  return {display:show!==false, position:'top', align:'start',
+          labels:{color:C.dim, boxWidth:9, boxHeight:9, padding:14,
+                  usePointStyle:true, pointStyle:'rectRounded', font:{size:11.5}}};
+}
+
+function setChart(id,cfg){
+  if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+  const el = document.getElementById(id);
+  if(!el || !window.Chart) return;
+  charts[id] = new Chart(el, cfg);
+}
+
+/* Barre : extremites arrondies a 4px cote valeur, ancrees a la base */
+const BAR = {borderRadius:4, borderSkipped:'start', maxBarThickness:38,
+             borderWidth:2, borderColor:C.surface};
+/* Segment empile : 2px de fond entre segments */
+const STACK = {borderRadius:3, borderWidth:2, borderColor:C.surface, maxBarThickness:38};
+/* Ligne : 2px, point cache au repos, >= 8px au survol */
+const LINE = {borderWidth:2, tension:.25, pointRadius:0, pointHoverRadius:5,
+              pointHitRadius:14, pointBorderWidth:2, pointBorderColor:C.surface};
+
+/* =====================================================================
+   FABRIQUES DE GRAPHIQUES
+   ===================================================================== */
+function lineParActivite(id, rows, valKey, fmt){
+  const m = new Map();
+  for(const r of rows){
+    const k = moisKey(r.d);
+    if(!m.has(k)) m.set(k,{DRINK:0,EAT:0,SMOKE:0,lab:moisLabel(r.d)});
+    m.get(k)[r.a] += (r[valKey]||0);
+  }
+  const ks = [...m.keys()].sort();
+  setChart(id,{type:'line', data:{
+    labels:ks.map(k=>m.get(k).lab),
+    datasets:ACT.map(a=>Object.assign({},LINE,{
+      label:a, data:ks.map(k=>m.get(k)[a]),
+      borderColor:C[a], backgroundColor:C[a], pointBackgroundColor:C[a],
+    }))},
+    options:{interaction:{mode:'index',intersect:false},
+      plugins:{legend:legendTop(true), tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+c.dataset.label+' : '+(fmt||FCFA)(c.parsed.y)}})},
+      scales:{y:axisY(fmt===P1?(v=>F1(v)+' %'):null), x:axisX()}}});
+}
+
+function barHorizontale(id, labels, values, couleur, fmt, labelSerie){
+  setChart(id,{type:'bar', data:{labels, datasets:[Object.assign({},BAR,{
+      label:labelSerie||'', data:values,
+      backgroundColor:Array.isArray(couleur)?couleur:couleur,
+      borderSkipped:'start',
+    })]},
+    options:{indexAxis:'y',
+      plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+(fmt||FCFA)(c.parsed.x)}})},
+      scales:{x:Object.assign(axisY(fmt),{grid:{color:C.grid,drawTicks:false}}),
+              y:{grid:{display:false}, border:{color:C.axis},
+                 ticks:{color:C.dim, font:{size:11}, autoSkip:false}}}}});
+}
+
+/* =====================================================================
+   NAVIGATION
+   ===================================================================== */
+const NAV = [
+  {g:'Direction', p:[
+    {id:'synthese', l:'Synthèse', f:true},
+    {id:'resultat', l:'Compte de résultat', f:true},
+  ]},
+  {g:'Recettes', p:[
+    {id:'ventes', l:'Ventes & locomotives', f:true},
+    {id:'horaires', l:'Profil de la nuit', f:true},
+    {id:'reglements', l:'Règlements & créances', f:false},
+  ]},
+  {g:'Rentabilité', p:[
+    {id:'marge', l:'Marge par activité', f:true, dot:'crit'},
+    {id:'cout-revient', l:'Coût de revient', f:false, dot:'new'},
+    {id:'depenses', l:'Dépenses', f:true},
+  ]},
+  {g:'Pilotage', p:[
+    {id:'commercial', l:'Remises & offerts', f:true, dot:'warn'},
+    {id:'stock', l:'Stock & inventaire', f:false, dot:'warn'},
+    {id:'caisse', l:'Performance caisse', f:false},
+    {id:'qualite', l:'Qualité des données', f:false, dot:'warn'},
+  ]},
+];
+
+const META = {
+  'synthese':['Synthèse',"Les chiffres que la direction doit retenir, sur la période choisie"],
+  'resultat':['Compte de résultat',"Du chiffre d'affaires brut au résultat net, cascade complète"],
+  'ventes':['Ventes & locomotives',"Concentration du chiffre d'affaires par article et catégorie"],
+  'horaires':['Profil de la nuit',"Répartition de l'activité sur la journée d'exploitation 14h → 13h59"],
+  'reglements':['Règlements & créances',"Moyens de paiement encaissés et ventes à crédit — cumul non filtrable"],
+  'marge':['Marge par activité',"Marge réelle calculée sur les achats effectivement engagés"],
+  'cout-revient':['Coût de revient',"Marge théorique par recette, confrontée à la marge réelle"],
+  'depenses':['Dépenses',"Achats externes, charges d'exploitation et investissements"],
+  'commercial':['Remises & offerts',"Coût total de l'effort commercial consenti"],
+  'stock':['Stock & inventaire',"Stock théorique, seuils d'alerte et valorisation"],
+  'caisse':['Performance caisse',"Cumul par caissier — export POS sans date, non filtrable"],
+  'qualite':['Qualité des données',"Contrôles de réconciliation et limites connues du jeu de données"],
+};
+
+/* Logo embarque en data URI : le tableau de bord reste un fichier
+   autonome, et le logo s'affiche meme sans reseau. 17 Ko. */
+const LOGO_TABOO = 'data:image/jpeg;base64,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';
+
+function buildSidebar(){
+  const el = document.getElementById('sidebar');
+  let h = `<div class="brand">
+    <img src="${LOGO_TABOO}" alt="TABOO — Restaurant, Lounge, Bar" width="118" height="118">
+    <div class="brand-sub">${dateLabel(DATA.meta.periode_debut)}<br>→ ${dateLabel(DATA.meta.periode_fin)}</div>
+  </div>`;
+  for(const g of NAV){
+    h += `<div class="nav-group-label">${g.g}</div>`;
+    for(const p of g.p){
+      h += `<a class="nav-item" data-page="${p.id}">${p.dot?`<span class="dot ${p.dot}"></span>`:''}<span>${p.l}</span></a>`;
+    }
+  }
+  el.innerHTML = h;
+  el.querySelectorAll('.nav-item').forEach(a=>a.addEventListener('click',()=>go(a.dataset.page)));
+}
+
+function go(id){
+  state.page = id;
+  document.querySelectorAll('.nav-item').forEach(a=>a.classList.toggle('active',a.dataset.page===id));
+  document.querySelectorAll('.page').forEach(s=>s.classList.toggle('active',s.id==='page-'+id));
+  const [t,s] = META[id];
+  document.getElementById('pageTitle').textContent = t;
+  document.getElementById('pageSub').textContent = s;
+  const p = NAV.flatMap(g=>g.p).find(x=>x.id===id);
+  document.getElementById('filters').classList.toggle('off',!p.f);
+  document.getElementById('filterNote').textContent =
+    p.f ? '' : 'source sans date';
+  window.scrollTo({top:0});
+  render(id);
+}
+
+/* =====================================================================
+   FILTRE DE PERIODE
+   ===================================================================== */
+function initFilters(){
+  document.getElementById('d1').value = state.start;
+  document.getElementById('d2').value = state.end;
+  document.getElementById('d1').min = DATA.meta.periode_debut;
+  document.getElementById('d2').max = DATA.meta.periode_fin;
+  document.getElementById('apply').addEventListener('click',()=>{
+    const a = document.getElementById('d1').value, b = document.getElementById('d2').value;
+    if(!a||!b||a>b) return;
+    state.start=a; state.end=b; state.preset=null;
+    document.querySelectorAll('[data-preset]').forEach(x=>x.classList.remove('on'));
+    render(state.page);
+  });
+  document.querySelectorAll('[data-preset]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const p = b.dataset.preset;
+      state.end = DATA.meta.periode_fin;
+      if(p==='all'){ state.start = DATA.meta.periode_debut; }
+      else{
+        const d = dOf(state.end); d.setDate(d.getDate()-parseInt(p));
+        const min = DATA.meta.periode_debut;
+        state.start = d.toISOString().slice(0,10);
+        if(state.start < min) state.start = min;
+      }
+      state.preset = p;
+      document.querySelectorAll('[data-preset]').forEach(x=>x.classList.toggle('on',x===b));
+      document.getElementById('d1').value = state.start;
+      document.getElementById('d2').value = state.end;
+      render(state.page);
+    });
+  });
+}
+
+/* =====================================================================
+   BASCULE « voir les chiffres » — la vue tableau exigee par
+   l'accessibilite : l'identite d'une serie ne repose jamais sur la
+   couleur seule.
+   ===================================================================== */
+function initToggles(){
+  document.addEventListener('click',ev=>{
+    const b = ev.target.closest('.mini[data-toggle]');
+    if(!b) return;
+    const t = document.getElementById(b.dataset.toggle);
+    if(!t) return;
+    const on = t.classList.toggle('on');
+    b.textContent = on ? 'Masquer les chiffres' : 'Voir les chiffres';
+  });
+}
+
+function tableHTML(cols, rows){
+  let h = '<div class="tbl"><table><thead><tr>';
+  for(const c of cols) h += `<th class="${c.num?'num':''}">${c.t}</th>`;
+  h += '</tr></thead><tbody>';
+  for(const r of rows){
+    h += '<tr>';
+    for(let i=0;i<cols.length;i++) h += `<td class="${cols[i].num?'num':''}">${r[i]}</td>`;
+    h += '</tr>';
+  }
+  return h+'</tbody></table></div>';
+}
+
+const RENDER = {};
+function render(id){
+  const f = RENDER[id];
+  if(!f) return;
+  try{ f(); }
+  catch(err){
+    // Un renderer qui echoue ne doit pas emporter tout le dashboard :
+    // la page concernee affiche l'erreur, les autres restent utilisables.
+    console.error('Erreur de rendu sur la page '+id, err);
+    const sec = document.getElementById('page-'+id);
+    if(sec) sec.insertAdjacentHTML('afterbegin',
+      `<div class="note crit"><div class="note-title">Erreur d'affichage sur cette page</div>
+       ${err.message} — les autres pages restent utilisables.</div>`);
+  }
+}
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+buildSidebar();
+initFilters();
+initToggles();
+go('synthese');
+</script>
+</body>
+</html>
