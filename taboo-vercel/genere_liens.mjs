@@ -40,7 +40,10 @@ export function fabriquerJeton(identifiant, secret, version = '1') {
   version = String(version).trim();
   // L'identifiant sert uniquement à savoir de qui vient un accès. Il est
   // dans le jeton en clair : ce n'est pas un secret, la signature l'est.
-  const propre = identifiant.toLowerCase().replace(/[^a-z0-9._-]/g, '');
+  // Le @ est autorisé pour qu'une adresse e-mail passe telle quelle : les
+  // journaux Vercel affichent alors « acces autorise · lad@exemple.com »
+  // au lieu d'un surnom qu'il faudrait traduire.
+  const propre = identifiant.toLowerCase().replace(/[^a-z0-9._@-]/g, '');
   if (!propre) throw new Error(`identifiant vide ou invalide : "${identifiant}"`);
   return `${propre}.${signer(`${version}:${propre}`, secret)}`;
 }
