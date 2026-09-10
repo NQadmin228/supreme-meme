@@ -4,3 +4,9 @@ index.html
 node_modules
 
 .vercel
+.acces_secret
+liens_personnels.txt
+index.html.reel
+.env.local
+
+.env*

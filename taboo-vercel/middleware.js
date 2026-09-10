@@ -135,8 +135,16 @@ function pageRefus(raison) {
 /* ---------- Middleware ---------- */
 
 export default async function middleware(requete) {
-  const secret = process.env.ACCES_SECRET;
-  const version = process.env.ACCES_VERSION || '1';
+  /* .trim() sur les deux valeurs, et ce n'est pas de la coquetterie.
+     Une variable d'environnement arrive très souvent avec un retour à la
+     ligne parasite -- `echo "1" | vercel env add` en ajoute un. La
+     signature porte sur `${version}:${identifiant}` : un "1\n" au lieu
+     de "1" produit une signature entièrement différente, donc un refus
+     de tous les liens valides, avec un message qui ne dit rien de la
+     cause. C'est exactement le piège dans lequel ce déploiement est
+     tombé. */
+  const secret = (process.env.ACCES_SECRET || '').trim();
+  const version = (process.env.ACCES_VERSION || '1').trim();
 
   /* Sans secret configuré, on REFUSE tout. Le réflexe inverse -- laisser
      passer quand la configuration manque -- est la cause classique des

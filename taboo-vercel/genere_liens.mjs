@@ -34,6 +34,10 @@ function signer(message, secret) {
 }
 
 export function fabriquerJeton(identifiant, secret, version = '1') {
+  // Symetrique du .trim() du middleware : si l'un nettoie et l'autre non,
+  // les signatures divergent et tous les liens sont refuses.
+  secret = String(secret).trim();
+  version = String(version).trim();
   // L'identifiant sert uniquement à savoir de qui vient un accès. Il est
   // dans le jeton en clair : ce n'est pas un secret, la signature l'est.
   const propre = identifiant.toLowerCase().replace(/[^a-z0-9._-]/g, '');
@@ -42,6 +46,8 @@ export function fabriquerJeton(identifiant, secret, version = '1') {
 }
 
 export function verifierJeton(jeton, secret, version = '1') {
+  secret = String(secret).trim();
+  version = String(version).trim();
   const sep = jeton.lastIndexOf('.');
   if (sep < 1) return null;
   const charge = jeton.slice(0, sep);
