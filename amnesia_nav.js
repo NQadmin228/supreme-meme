@@ -51,6 +51,12 @@ const NAV = [
     {id:'explorer', l:'Catégories & produits', f:true},
     {id:'horaires', l:'Tranches horaires', f:false},
   ]},
+  {g:'Rentabilité', p:[
+    // Les couts ne viennent pas des exports d'AMNESIA mais du catalogue
+    // de TABOO. La page le dit des sa premiere ligne, et sa couverture
+    // est une tuile et non une note de bas de page.
+    {id:'couts', l:'Coût de revient & marge', f:false, dot:'warn'},
+  ]},
   {g:'Exploitation', p:[
     {id:'depenses', l:'Dépenses', f:false},
     {id:'caissiers', l:'Caissiers', f:false},
@@ -73,6 +79,7 @@ const META = {
   'depenses':['Dépenses',"Vingt postes de décaissement, du plus lourd au plus léger"],
   'rapprochement':['Rapprochement caisse',"Ce que l'exploitation déclare, face à ce que la caisse enregistre"],
   'ecarts':['Écarts & contrôles',"Tout ce qui ne concorde pas entre les trois sources, chiffré"],
+  'couts':['Coût de revient & marge',"Marge par produit — coûts relevés chez TABOO, appliqués aux articles de même nom"],
 };
 
 /* Jeux lourds a charger selon la page ouverte.

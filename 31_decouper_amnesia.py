@@ -72,6 +72,20 @@ else:
     print("  n'auront rien a afficher. Lancer d'abord :")
     print("      python 32_extraction_mensuel_amnesia.py")
 
+# --- Les couts importes de TABOO, s'ils ont ete apparies -------------
+# Les exports d'AMNESIA ne portent aucun prix d'achat. La direction
+# indique que les deux maisons achetent les memes produits aux memes
+# conditions ; 33_couts_amnesia.py transporte donc les couts unitaires
+# releves chez TABOO vers les articles de meme nom. La page dit d'ou ils
+# viennent et sur quelle part du chiffre d'affaires ils portent.
+COUTS = BASE / "data_couts_amnesia.json"
+if COUTS.exists():
+    donnees["couts"] = json.loads(COUTS.read_text(encoding="utf-8"))
+    print()
+    print(f"  couts importes de TABOO : "
+          f"{donnees['couts']['meta']['apparies']} articles apparies, "
+          f"{100 * donnees['couts']['meta']['couverture']:.1f} % du CA couvert")
+
 CIBLE.mkdir(parents=True, exist_ok=True)
 for ancien in CIBLE.glob("*.json"):
     ancien.unlink()

@@ -1412,3 +1412,193 @@ RENDER['ecarts'] = function(){
                     a.montant === null ? '—' : F(a.montant)]));
   rendreFiltrable('ec-table', 'Filtrer : critique, classeur, caisse…');
 };
+
+
+/* =====================================================================
+   PAGE — COUT DE REVIENT & MARGE
+   ---------------------------------------------------------------------
+   Les couts viennent du catalogue de TABOO, transportes sur indication
+   de la direction. Trois precautions tiennent cette page debout :
+
+   1. La couverture est une TUILE, pas une note. Elle vaut 46 % du
+      chiffre d'affaires. Une marge lue comme celle de l'etablissement
+      alors qu'elle ne porte que sur la moitie de ses ventes serait pire
+      qu'une absence de marge.
+
+   2. Rien n'est extrapole. Le taux des articles costes n'est jamais
+      applique aux autres : rien ne dit que les champagnes sans cout
+      marginent comme les bieres avec.
+
+   3. La marge theorique est confrontee a la marge CONSTATEE au
+      classeur, qui porte sur 100 % du perimetre. Deux mesures
+      independantes du meme phenomene valent mieux qu'une seule, et leur
+      ecart est lui-meme une information.
+   ===================================================================== */
+
+const CTS = () => DATA.couts || {meta: {}, articles: [], non_apparies: []};
+
+RENDER['couts'] = function(){
+  const c = CTS();
+  const m = c.meta || {};
+  const arts = c.articles || [];
+
+  const ca = arts.reduce((s, x) => s + x.net, 0);
+  const cout = arts.reduce((s, x) => s + x.ct, 0);
+  const marge = ca - cout;
+  const offert = arts.reduce((s, x) => s + x.co, 0);
+
+  /* La marge CONSTATEE : achats matiere du classeur contre chiffre
+     d'affaires declare, sur la saison en cours et sur 100 % du
+     perimetre. Elle ne vient pas des memes donnees et ne mesure pas
+     tout a fait la meme chose -- un achat n'est pas une consommation,
+     le stock bouge entre les deux -- mais elle est la seule mesure qui
+     couvre l'etablissement entier. */
+  const saison = (typeof saisonCourante === 'function') ? saisonCourante() : [];
+  const caSaison = saison.reduce((s, x) => s + x.ca, 0);
+  const matSaison = saison.reduce((s, x) => s + x.matiere, 0);
+  const tauxConstate = caSaison ? PCT(caSaison - matSaison, caSaison) : null;
+
+  document.getElementById('ct-kpi').innerHTML = [
+    tuile({k: 'MARGE SUR LE PÉRIMÈTRE COUVERT', v: Fc(marge), u: 'F', hero: true,
+           cls: 'accent',
+           d: F1(PCT(marge, ca)) + ' % de taux de marge · ' + F(arts.length)
+              + ' articles'}),
+    tuile({k: 'PART DU CA COUVERTE', v: F1(100 * (m.couverture || 0)), u: '%',
+           cls: (m.couverture || 0) < 0.6 ? 'warn' : '',
+           d: F(m.ca_couvert) + ' F sur ' + F(m.ca_total) + ' F'}),
+    tuile({k: 'COÛT DE CE QUI EST OFFERT', v: Fc(offert), u: 'F', cls: 'crit',
+           d: "ce que les articles offerts ont réellement coûté à l'achat"}),
+    tuile({k: 'MARGE CONSTATÉE AU CLASSEUR',
+           v: tauxConstate === null ? '—' : F1(tauxConstate), u: '%',
+           d: tauxConstate === null ? 'classeur mensuel absent'
+              : 'sur 100 % du périmètre, par les achats réels'}),
+  ].join('');
+
+  const ecart = tauxConstate === null ? null : PCT(marge, ca) - tauxConstate;
+  document.getElementById('ct-constat').innerHTML = constat(
+    'warn', "Des coûts mesurés ailleurs, et ce qu'ils valent ici",
+    `Les exports de caisse d'AMNESIA ne portent <b>aucun prix d'achat</b>. Les
+     coûts affichés sur cette page sont ceux relevés chez <b>TABOO</b>, appliqués
+     aux articles qu'AMNESIA vend sous le même nom, sur indication de la
+     direction : les deux maisons achètent les mêmes produits aux mêmes
+     conditions.
+     <br><br><b>Ce qui va dans ce sens.</b> Les listes de prix coïncident. Sur les
+     articles peu remisés — sodas, bières, chichas — le prix moyen constaté chez
+     AMNESIA vaut exactement celui affiché chez TABOO. L'écart n'apparaît que sur
+     les bouteilles, où il mesure la remise accordée et non un tarif différent.
+     ${ecart === null ? '' : `Et les deux mesures de marge se répondent :
+       <b>${F1(PCT(marge, ca))} %</b> par les coûts importés,
+       <b>${F1(tauxConstate)} %</b> par les achats réels du classeur, soit
+       ${F1(Math.abs(ecart))} point${Math.abs(ecart) > 1 ? 's' : ''} d'écart.
+       Un achat n'est pas une consommation — le stock bouge entre les deux — et les
+       deux périodes ne se recouvrent pas exactement : un écart de cet ordre était
+       attendu.`}
+     <br><br><b>La limite, et elle est basse.</b> TABOO ne connaît le coût que de
+     ${F(m.articles_costes_taboo)} de ses ${F(m.articles_catalogue_taboo)} articles.
+     Ce n'est pas un problème d'écriture des noms : Moët, Laurent-Perrier, Martell,
+     Jack Daniel's, Chivas et Glenfiddich figurent bien à son catalogue, sans coût.
+     La marge par produit d'AMNESIA porte donc sur
+     <b>${F1(100 * (m.couverture || 0))} %</b> de son chiffre d'affaires, et rien
+     n'est extrapolé au reste.`);
+
+  /* --- par famille ---------------------------------------------------- */
+  const fam = new Map();
+  for(const x of arts){
+    const e = fam.get(x.c) || {net: 0, ct: 0};
+    e.net += x.net; e.ct += x.ct;
+    fam.set(x.c, e);
+  }
+  const familles = [...fam.entries()]
+    .map(([k, v]) => ({k, marge: v.net - v.ct, net: v.net, taux: PCT(v.net - v.ct, v.net)}))
+    .sort((a, b) => b.marge - a.marge);
+
+  setChart('c-ct-cat', {type: 'bar',
+    data: {labels: familles.map(x => x.k), datasets: [
+      Object.assign({}, STACK, {label: 'Coût de revient',
+        data: familles.map(x => fam.get(x.k).ct), backgroundColor: C.cat[1]}),
+      Object.assign({}, STACK, {label: 'Marge',
+        data: familles.map(x => x.marge), backgroundColor: C.cat[0]}),
+    ]},
+    options: {interaction: {mode: 'index', intersect: false},
+      plugins: {legend: legendTop(true), tooltip: Object.assign({}, TOOLTIP, {
+        callbacks: {label: c2 => ' ' + c2.dataset.label + ' : ' + FCFA(c2.parsed.y),
+          footer: items => {
+            const x = familles[items[0].dataIndex];
+            return 'Taux de marge : ' + F1(x.taux) + ' %';
+          }}})},
+      // Empilees, marge et cout font le chiffre d'affaires : la hauteur
+      // de la barre est ce que la famille a rapporte, et la couleur dit
+      // ce qui en reste. L'etiquette de sommet porte le taux.
+      // Une vingtaine de familles : a plat, Chart.js en masque une sur
+      // deux pour les faire tenir, et on ne sait plus quelle barre porte
+      // quel nom. Inclinees, elles tiennent toutes.
+      scales: {y: Object.assign(axisY(), {stacked: true}),
+               x: Object.assign(axisX({ticks: {color: C.faint, font: {size: 9.5},
+                                               maxRotation: 60, minRotation: 60,
+                                               autoSkip: false}}),
+                                {stacked: true})}},
+    plugins: [etiquetteSommet(familles.map(x => x.taux), v => F1(v) + ' %')]});
+
+  document.getElementById('ct-cat-t').innerHTML = tableHTML(
+    [{t: 'Famille'}, {t: "Chiffre d'affaires", num: true}, {t: 'Coût de revient', num: true},
+     {t: 'Marge', num: true}, {t: 'Taux', num: true}],
+    familles.map(x => [x.k, F(x.net), F(fam.get(x.k).ct), F(x.marge),
+                       F1(x.taux) + ' %']));
+
+  /* --- les dix qui rapportent ----------------------------------------- */
+  const top = [...arts].sort((a, b) => (b.net - b.ct) - (a.net - a.ct)).slice(0, 10);
+  barHorizontale('c-ct-top', top.map(x => x.a), top.map(x => x.net - x.ct),
+                 C.cat[0]);
+
+  /* --- taux des dix plus gros vendeurs --------------------------------
+     Classes par CA et non par taux : un article a 90 % de marge qui pese
+     trois ventes n'apprend rien, et se placerait en tete. */
+  // barHorizontale ecrit d'office la part de chaque barre dans le total
+  // affiche. Sur des TAUX, cette part serait la fraction d'une somme de
+  // pourcentages, c'est-a-dire rien. On dessine donc a la main, et on
+  // ecrit le taux lui-meme au bout de la barre.
+  const gros = [...arts].slice(0, 10);
+  setChart('c-ct-taux', {type: 'bar',
+    data: {labels: gros.map(x => x.a), datasets: [Object.assign({}, BAR, {
+      label: 'Taux de marge', data: gros.map(x => PCT(x.net - x.ct, x.net)),
+      backgroundColor: C.cat[3], borderSkipped: 'start'})]},
+    options: {indexAxis: 'y', layout: {padding: {right: 46}},
+      plugins: {legend: {display: false}, tooltip: Object.assign({}, TOOLTIP, {
+        callbacks: {label: c2 => ' ' + F1(c2.parsed.x) + ' % de marge',
+          footer: items => {
+            const x = gros[items[0].dataIndex];
+            return FCFA(x.net) + ' de chiffre — ' + FCFA(x.net - x.ct) + ' de marge';
+          }}})},
+      scales: {x: Object.assign(axisY(v => F1(v) + ' %'),
+                                {grid: {color: C.grid, drawTicks: false}}),
+               y: {grid: {display: false}, border: {color: C.axis},
+                   ticks: {color: C.dim, font: {size: 11}, autoSkip: false}}}},
+    plugins: [etiquettesPlugin(v => F1(v) + ' %', 'y')]});
+
+  /* --- le detail -------------------------------------------------------- */
+  document.getElementById('ct-table').innerHTML = tableHTML(
+    [{t: 'Article'}, {t: 'Famille'}, {t: 'Vendus', num: true},
+     {t: "Chiffre d'affaires", num: true}, {t: 'Coût unitaire', num: true},
+     {t: 'Coût total', num: true}, {t: 'Marge', num: true}, {t: 'Taux', num: true},
+     {t: 'Offerts', num: true}, {t: 'Coût des offerts', num: true}],
+    arts.map(x => [x.a, x.c, F(x.q), F(x.net), F(x.cr), F(x.ct), F(x.net - x.ct),
+                   F1(PCT(x.net - x.ct, x.net)) + ' %', F(x.qo), F(x.co)]));
+  rendreFiltrable('ct-table', 'Filtrer : CHAMPAGNES, HENNESSY, BIERES…');
+
+  /* --- le trou ----------------------------------------------------------- */
+  const abs = c.non_apparies || [];
+  document.getElementById('ct-absents').innerHTML =
+    `<div class="foot" style="margin-bottom:12px">
+       ${F(c.non_apparies_total)} articles vendus par AMNESIA n'ont pas de coût
+       chez TABOO, pour ${F(c.non_apparies_ca)} F de chiffre d'affaires. Les
+       ${F(abs.length)} plus gros sont listés ici : obtenir leur prix d'achat
+       ferait passer la couverture de ${F1(100 * (m.couverture || 0))} % à
+       ${F1(100 * ((m.ca_couvert + abs.reduce((s, x) => s + x.net, 0)) / m.ca_total))} %.
+     </div>`
+    + tableHTML(
+      [{t: 'Article'}, {t: 'Famille'}, {t: 'Type'}, {t: 'Vendus', num: true},
+       {t: "Chiffre d'affaires", num: true}, {t: '% du CA total', num: true}],
+      abs.map(x => [x.a, x.c, x.t, F(x.q), F(x.net),
+                    F1(PCT(x.net, m.ca_total)) + ' %']));
+  rendreFiltrable('ct-absents', 'Filtrer : CHAMPAGNES, WHISKY…');
+};

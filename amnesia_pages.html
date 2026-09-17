@@ -431,3 +431,63 @@
     <div id="ec-table"></div>
   </div>
 </section>
+
+<!-- ================== COUT DE REVIENT & MARGE ===================
+     Les exports d'AMNESIA ne portent aucun prix d'achat. Les couts
+     affiches ici sont ceux de TABOO, transportes article par article
+     sur indication de la direction : les deux maisons achetent les
+     memes produits aux memes conditions.
+
+     La page ne cache pas d'ou ils viennent, ni jusqu'ou ils portent.
+     La couverture est une TUILE, au meme rang que la marge : une marge
+     calculee sur moins de la moitie du chiffre d'affaires et lue comme
+     la marge de l'etablissement serait pire que pas de marge du tout.
+     ============================================================== -->
+<section class="page" id="page-couts">
+  <div class="grid g4" id="ct-kpi"></div>
+
+  <div id="ct-constat"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Ce que chaque famille rapporte</h3>
+      <div class="sub">Marge en francs et taux de marge, sur les seuls articles
+        dont le cout est connu. Les familles sans cout n'apparaissent pas : elles
+        ne sont pas a zero, elles sont hors de portee.</div></div>
+      <button class="mini" data-toggle="ct-cat-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-ct-cat"></canvas></div>
+    <div class="alt-table" id="ct-cat-t"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Les dix articles qui rapportent le plus</h3>
+      <div class="sub">Part de chacun dans la marge de ces dix-là.</div>
+      <div class="chart-wrap"><canvas id="c-ct-top"></canvas></div>
+    </div>
+    <div class="card"><h3>Taux de marge des dix plus gros vendeurs</h3>
+      <div class="sub">Classes par chiffre d'affaires, pas par taux : c'est ce
+        qui pese qui merite d'etre regarde.</div>
+      <div class="chart-wrap"><canvas id="c-ct-taux"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Cout de revient par produit</h3>
+      <div class="sub">Tapez un nom, une famille, ou &laquo; CHAMPAGNES &raquo; pour
+        ne garder que ces lignes.</div></div>
+    </div>
+    <div id="ct-table"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Ce qui n'est pas couvert</h3>
+      <div class="sub">Les articles vendus par AMNESIA dont TABOO ne connait pas
+        le cout. Ils sont ici pour que le trou se voie, et pour dire quel cout
+        obtenir en premier.</div></div>
+    </div>
+    <div id="ct-absents"></div>
+  </div>
+</section>

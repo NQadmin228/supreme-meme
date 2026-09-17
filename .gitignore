@@ -17,6 +17,9 @@ data_amnesia.json
 # decaissements poste par poste. Extrait du classeur d'exploitation
 # par 32_extraction_mensuel_amnesia.py, et jamais publie.
 data_mensuel_amnesia.json
+# Couts de revient par article, importes du catalogue de TABOO et
+# appliques aux ventes d'AMNESIA. Reconstruit par 33_couts_amnesia.py.
+data_couts_amnesia.json
 instantanes/
 *.json.br
 
