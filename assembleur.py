@@ -9,7 +9,7 @@ Assemblage des coquilles, pour tous les etablissements.
 POURQUOI UN SEUL ASSEMBLEUR
 ---------------------------
 TABOO et AMNESIA partagent le chassis : graphiques, tableaux filtrables,
-export Excel, tiroir de navigation, chargement paresseux. Ce qui leur
+tiroir de navigation, chargement paresseux. Ce qui leur
 appartient en propre, ce sont leurs PAGES, leurs fonctions de rendu,
 leur navigation, leur logo et leurs couleurs.
 
@@ -132,7 +132,6 @@ def assembler(code, surcharges):
     render = (BASE / cfg["render"]).read_text(encoding="utf-8")
     nav = (BASE / cfg["nav"]).read_text(encoding="utf-8")
     chargement = (BASE / "chargement.js").read_text(encoding="utf-8")
-    export_excel = (BASE / "export_excel.js").read_text(encoding="utf-8")
 
     # 1. Les pages dans le conteneur de contenu.
     ancre = '<div class="content" id="content"></div>'
@@ -150,7 +149,7 @@ def assembler(code, surcharges):
    DEMARRAGE — appele par le chargeur une fois le socle recupere
    ====================================================================="""
     assert ancre in html, "ancre de demarrage introuvable"
-    html = html.replace(ancre, render + "\n" + export_excel + "\n" + ancre)
+    html = html.replace(ancre, render + "\n" + ancre)
 
     # 4. Identite visuelle.
     html = html.replace("__LOGO__", data_uri(BASE / cfg["logo"]))

@@ -3,7 +3,7 @@
    ---------------------------------------------------------------------
    Une fonction par page, enregistree dans RENDER. Le chassis (gabarit
    partage avec TABOO) fournit tout le reste : formatage, graphiques,
-   tableaux, filtres, export Excel.
+   tableaux, filtres.
 
    CE QUI N'EST PAS ICI, ET NE PEUT PAS L'ETRE
    -------------------------------------------
@@ -123,7 +123,8 @@ RENDER['synthese'] = function(){
     options:{cutout:'58%', plugins:{legend:legendTop(true),
       tooltip:Object.assign({},TOOLTIP,{callbacks:{
         label:c=>' '+c.label+' : '+FCFA(c.parsed)
-                 +'  ('+F1(PCT(c.parsed,totType))+' %)'}})}}});
+                 +'  ('+F1(PCT(c.parsed,totType))+' %)'}})}},
+    plugins:[pctAnneau()]});
 
   /* --- dix premieres categories --- */
   const cats = [...DATA.ventes_categorie].slice(0, 10);
@@ -337,7 +338,12 @@ RENDER['ventes'] = function(){
           ? ' '+F(c.parsed.y)+' nuits' : ' CA net : '+FCFA(c.parsed.y)}})},
       scales:{y:axisY(), x:axisX(),
         y1:Object.assign(axisY(v=>F(v)),
-          {position:'right', grid:{drawOnChartArea:false}})}}});
+          {position:'right', grid:{drawOnChartArea:false}})}},
+    // Part du mois dans la periode affichee : la question posee a ce
+    // graphique est « quel mois porte le chiffre », et elle se lit sans
+    // survoler quoi que ce soit.
+    plugins:[etiquetteSommet(mois.map(m => PCT(m.net, sum(mois, 'net'))),
+                             v => F1(v) + ' %')]});
 
   /* --- par jour de la semaine, en MOYENNE par nuit ouverte --- */
   const sem = JOURS.map((nom,i)=>{
@@ -347,12 +353,13 @@ RENDER['ventes'] = function(){
   });
   setChart('c-ve-semaine', {type:'bar',
     data:{labels:sem.map(s=>s.nom), datasets:[Object.assign({}, BAR, {
-      label:'CA net moyen', data:sem.map(s=>s.moy), backgroundColor:C.seq[5]})]},
+      label:'CA net moyen', data:sem.map(s=>s.moy), backgroundColor:C.cat[0]})]},
     options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
         callbacks:{label:c=>' '+FCFA(c.parsed.y)+' en moyenne',
           footer:items=>{const s=sem[items[0].dataIndex];
             return s.nuits+' nuit'+(s.nuits>1?'s':'')+' — '+FCFA(s.net)+' au total';}}})},
-      scales:{y:axisY(), x:axisX()}}});
+      scales:{y:axisY(), x:axisX()}},
+    plugins:[pctBarres('x')]});
 
   document.getElementById('ve-detail').innerHTML = tableHTML(
     [{t:'Nuit'},{t:'Brut',num:true},{t:'Remises',num:true},{t:'Net',num:true},
@@ -465,14 +472,14 @@ if(!window.__amnesiaExploCable){
     if(b){
       if(b.dataset.explo === 'racine') state.explo = {t:null, c:null};
       else if(b.dataset.explo === 'type') state.explo = {t:state.explo.t, c:null};
-      RENDER['explorer'](); ajouterExports(); return;
+      RENDER['explorer'](); return;
     }
     const d = ev.target.closest('[data-descendre]');
     if(d && document.getElementById('page-explorer')?.classList.contains('active')){
       const v = d.dataset.descendre;
       if(!state.explo.t) state.explo = {t:v, c:null};
       else if(!state.explo.c) state.explo = {t:state.explo.t, c:v};
-      RENDER['explorer'](); ajouterExports();
+      RENDER['explorer']();
     }
   });
 }
@@ -509,7 +516,8 @@ RENDER['horaires'] = function(){
         callbacks:{label:c=>' '+FCFA(c.parsed.y)
                             +'  ('+F1(PCT(c.parsed.y,tot))+' % du CA)'}})},
       scales:{y:axisY(), x:axisX({ticks:{color:C.faint, font:{size:9.5},
-                                          maxRotation:60, minRotation:60}})}}});
+                                          maxRotation:60, minRotation:60}})}},
+    plugins:[pctBarres('x')]});
 
   document.getElementById('ho-t').innerHTML = tableHTML(
     [{t:'Tranche'},{t:'CA',num:true},{t:'% du CA',num:true},{t:'Ventes',num:true},
@@ -529,11 +537,12 @@ RENDER['horaires'] = function(){
   setChart('c-ho-ventes', {type:'bar',
     data:{labels:h.map(r=>r.libelle), datasets:[Object.assign({}, BAR, {
       label:'Ventes', data:h.map(r=>r.ventes),
-      backgroundColor:C.seq[4], maxBarThickness:20})]},
+      backgroundColor:C.cat[1], maxBarThickness:20})]},
     options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
         callbacks:{label:c=>' '+F(c.parsed.y)+' ventes'}})},
       scales:{y:axisY(v=>F(v)), x:axisX({ticks:{color:C.faint, font:{size:9.5},
-                                                 maxRotation:60, minRotation:60}})}}});
+                                                 maxRotation:60, minRotation:60}})}},
+    plugins:[pctBarres('x')]});
 
   document.getElementById('ho-note').textContent =
     "Ce profil vient d'un export cumulé qui ne porte aucune date : il couvre "
@@ -574,7 +583,8 @@ RENDER['caissiers'] = function(){
     options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
         callbacks:{label:c=>' '+FCFA(c.parsed.y)
                             +'  ('+F1(PCT(c.parsed.y,totCA))+' %)'}})},
-      scales:{y:axisY(), x:axisX()}}});
+      scales:{y:axisY(), x:axisX()}},
+    plugins:[pctBarres('x')]});
 
   const maxCA = Math.max(...actifs.map(c=>c.net), 1);
   document.getElementById('ca-table').innerHTML = tableHTML(
@@ -633,21 +643,23 @@ RENDER['reglements'] = function(){
   setChart('c-re-part', {type:'doughnut',
     data:{labels:reg.map(r=>r.moyen),
       datasets:[{data:reg.map(r=>r.montant),
-        backgroundColor:reg.map((_,i)=>C.seq[Math.min(C.seq.length-1, 1+i*2)]),
+        backgroundColor:reg.map((_,i)=>C.cat[i % C.cat.length]),
         borderColor:C.surface, borderWidth:3}]},
     options:{cutout:'58%', plugins:{legend:legendTop(true),
       tooltip:Object.assign({},TOOLTIP,{callbacks:{
         label:c=>' '+c.label+' : '+FCFA(c.parsed)
-                 +'  ('+F1(PCT(c.parsed,tot))+' %)'}})}}});
+                 +'  ('+F1(PCT(c.parsed,tot))+' %)'}})}},
+    plugins:[pctAnneau()]});
 
   setChart('c-re-nb', {type:'bar',
     data:{labels:reg.map(r=>r.moyen), datasets:[Object.assign({}, BAR, {
-      label:'Opérations', data:reg.map(r=>r.nombre), backgroundColor:C.seq[4]})]},
+      label:'Opérations', data:reg.map(r=>r.nombre), backgroundColor:C.cat[1]})]},
     options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
         callbacks:{label:c=>' '+F(c.parsed.y)+' opérations',
           footer:items=>{const r=reg[items[0].dataIndex];
             return 'Montant moyen : '+FCFA(r.nombre ? r.montant/r.nombre : 0);}}})},
-      scales:{y:axisY(v=>F(v)), x:axisX()}}});
+      scales:{y:axisY(v=>F(v)), x:axisX()}},
+    plugins:[pctBarres('x')]});
 
   document.getElementById('re-table').innerHTML = tableHTML(
     [{t:'Moyen de règlement'},{t:'Opérations',num:true},{t:'Montant',num:true},
@@ -745,35 +757,23 @@ const CHARGES = [
   {k: 'paie',    l: 'Masse salariale'},
   {k: 'capex',   l: 'Investissements'},
 ];
-/* Une rampe, et non quatre teintes : ces quatre charges forment une
-   decomposition ORDONNEE, du plus amont (la matiere) au plus aval
-   (l'investissement), et la pile les empile dans cet ordre. Le sombre
-   vers le clair porte donc l'ordre, du bas vers le haut, dans le meme
-   sens que la legende.
+/* Quatre NATURES, donc quatre teintes -- et non quatre echelons d'une
+   meme rampe. La rampe encodait un ordre que ces charges n'ont pas :
+   rien ne dit que la matiere vient « avant » la paie, elles sont
+   seulement differentes. Et quatre bleus voisins ne se distinguaient
+   pas : l'ecart minimal entre les deux plus GROS segments tombait a 7,1
+   en vision deuteranope.
 
-   Le choix des quatre echelons est MESURE, pas pris au jugement. Sur
-   les huit de la rampe, avec la ligne d'or du chiffre d'affaires dans
-   la comparaison, c'est le sous-ensemble qui maximise l'ecart minimal
-   entre toutes les paires :
-
-       paires les plus proches, DE2000    normal  deut  prot  trit
-       matiere / opex                       15,7  10,7  11,6  18,6
-       paie / investissements                9,3  13,0  12,0   7,4
-
-   Une seule paire descend sous 9, en vision tritanope, et elle porte le
-   plus petit segment de la pile. Le premier jeu essaye (echelons 2, 4,
-   6, 8) tombait a 7,1 sur la paire matiere / exploitation, c'est-a-dire
-   sur les deux plus GROS segments : c'etait la que ca comptait.
-
-   Aucune quatrieme teinte n'etait disponible : la palette d'AMNESIA est
-   l'or du logo et une rampe bleue, et tous les jeux mixtes essayes
-   (cyan, bleu clair, vert d'etat) tombaient entre 3,1 et 7,9 face a
-   l'or. Une teinte du triplet produit -- boisson, plat, chicha -- aurait
-   passe la mesure, mais elle designe une nature d'article sur les deux
-   tableaux de bord : la reprendre pour une charge ferait mentir la
-   couleur ailleurs. */
-const couleurCharge = () => ({matiere: C.seq[0], opex: C.seq[3],
-                              paie: C.seq[6], capex: C.seq[7]});
+   Les teintes viennent de la famille categorielle du chassis, propre a
+   chaque etablissement parce qu'une couleur lisible sur le bleu profond
+   de TABOO ne l'est pas forcement sur le brun d'AMNESIA. Celles
+   d'AMNESIA ont ete cherchees sous contrainte -- contraste borne haut
+   ET bas, rouge et vert francs exclus parce qu'ils portent deja un
+   etat, l'or de la marque dans la comparaison -- et tiennent un ecart
+   minimal de 15,2 dans les quatre visions. Le detail du calcul est dans
+   lib/etablissements.js, a cote des valeurs. */
+const couleurCharge = () => ({matiere: C.cat[0], opex: C.cat[1],
+                              paie: C.cat[2], capex: C.cat[3]});
 
 /* =====================================================================
    PAGE — COMPTE DE RESULTAT
@@ -866,7 +866,13 @@ RENDER['resultat'] = function(){
             return r === null ? 'Résultat : paie non saisie'
               : 'Résultat : ' + FCFA(r) + '  (' + F1(PCT(r, m.ca)) + ' %)';
           }}})},
-      scales: {y: axisY(), x: axisX()}}});
+      scales: {y: axisY(), x: axisX()}},
+    // Le total des charges en part du chiffre d'affaires DU MOIS : ce
+    // qui reste au-dessus de 100 % est la perte, ce qui manque est le
+    // resultat. La lecture se fait en diagonale, sans survol.
+    plugins: [etiquetteSommet(
+      tous.map(m => PCT(m.matiere + m.opex + m.capex + (m.paie || 0), m.ca)),
+      v => F(v) + ' %')]});
 
   document.getElementById('cr-cascade-t').innerHTML = tableHTML(
     [{t: 'Mois'}, {t: "Chiffre d'affaires", num: true}, {t: 'Achats matière', num: true},
@@ -892,7 +898,7 @@ RENDER['resultat'] = function(){
       services.set(s.service, (services.get(s.service) || 0) + s.montant);
   const parService = [...services.entries()].sort((a, b) => b[1] - a[1]);
   barHorizontale('c-cr-paie', parService.map(x => x[0]),
-                 parService.map(x => x[1]), C.seq[5]);
+                 parService.map(x => x[1]), C.cat[2]);
 
   // --- les deux taux ----------------------------------------------------
   // Un ratio n'a de sens que si son denominateur en a un. Le dernier
@@ -1024,6 +1030,7 @@ RENDER['depenses'] = function(){
   // La couleur porte la NATURE du poste, pas son rang : deux postes de
   // meme nature se lisent ensemble sans consulter de legende.
   const parNature = {matiere: CC.matiere, opex: CC.opex, capex: CC.capex};
+
   barHorizontale('c-dp-postes', rangs.map(x => x[0]),
                  rangs.map(x => x[1].montant),
                  rangs.map(x => parNature[x[1].classe] || C.seq[3]));
@@ -1059,7 +1066,10 @@ RENDER['depenses'] = function(){
                    + (m.ca ? '  (' + F1(PCT(s, m.ca)) + ' % du CA)' : '');
           }}})},
       scales: {x: Object.assign(axisX(), {stacked: true}),
-               y: Object.assign(axisY(), {stacked: true})}}});
+               y: Object.assign(axisY(), {stacked: true})}},
+    plugins: [etiquetteSommet(
+      tous.map(m => PCT(m.matiere + m.opex + m.capex, m.ca)),
+      v => F(v) + ' %')]});
 
   document.getElementById('dp-mois-t').innerHTML = tableHTML(
     [{t: 'Mois'}, {t: 'Achats matière', num: true}, {t: "Charges d'exploit.", num: true},
@@ -1154,7 +1164,12 @@ RENDER['rapprochement'] = function(){
             return 'Écart : ' + FCFA(x.decl - x.pos)
                    + '  (' + F1(PCT(x.decl - x.pos, x.pos)) + ' %)';
           }}})},
-      scales: {y: axisY(), x: axisX()}}});
+      scales: {y: axisY(), x: axisX()}},
+    // L'ecart en pourcentage, mois par mois : c'est la seule chose que
+    // ce graphique a a dire, et elle etait cachee dans l'infobulle.
+    plugins: [etiquetteSommet(
+      parMois.map(x => PCT(x.decl - x.pos, x.pos)),
+      v => (v > 0 ? '+' : '') + F1(v) + ' %')]});
 
   document.getElementById('rp-mois-t').innerHTML = tableHTML(
     [{t: 'Mois'}, {t: 'Déclaré', num: true}, {t: 'Caisse', num: true},
@@ -1168,7 +1183,7 @@ RENDER['rapprochement'] = function(){
     .map(c => ({l: c.l, v: saison.reduce((s, m) => s + (m[c.c] || 0), 0)}))
     .filter(x => x.v > 0).sort((a, b) => b.v - a.v);
   barHorizontale('c-rp-canaux', canaux.map(x => x.l), canaux.map(x => x.v),
-                 canaux.map((_, i) => C.seq[Math.min(C.seq.length - 1, 1 + i)]));
+                 canaux.map((_, i) => C.cat[i % C.cat.length]));
 
   // --- nuit par nuit ------------------------------------------------------------
   // L'etat est ecrit en toutes lettres dans la ligne : le filtre du

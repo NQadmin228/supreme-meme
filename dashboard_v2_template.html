@@ -85,6 +85,21 @@
   /* --- statut (reserve, jamais serie) — tous >= 3:1 sur --surface --- */
   --st-good:#0ca30c; --st-warn:#fab219; --st-serious:#ec835a; --st-crit:#d03b3b;
 
+  /* --- series CATEGORIELLES : des natures, pas un ordre ---
+     La rampe sequentielle ci-dessous encode une GRADATION. Employee
+     pour des categories sans ordre -- achats, exploitation, paie,
+     investissements -- elle donne quatre nuances d'une meme teinte que
+     rien ne distingue : c'etait le cas, et l'ecart minimal entre les
+     deux plus grosses tombait a 7,1 en vision deuteranope.
+
+     Ces cinq-ci sont mesurees, pas choisies, et chaque etablissement a
+     les siennes : une teinte lisible sur le bleu profond de TABOO ne
+     l'est pas forcement sur le brun sombre d'AMNESIA. Les valeurs par
+     defaut reprennent le triplet produit de TABOO, deja valide, plus
+     ses deux teintes de comparaison. */
+  --cat-1:#199e70; --cat-2:#d95926; --cat-3:#9085e9;
+  --cat-4:#c98500; --cat-5:#3987e5;
+
   /* --- rampe sequentielle : une seule teinte, sombre -> clair ---
      Bleu et non cyan : une rampe cyan sur un fond bleu-vert verrait
      ses premiers pas se fondre dans la surface. */
@@ -374,10 +389,6 @@ tr.cliquable td:nth-child(2)::after{content:' A'; color:var(--accent); font-we
 .niveau-fin{font-size:11.5px; color:var(--ink-faint); margin-top:10px;}
 
 /* ---------- Export Excel ---------- */
-.export-xlsx{border-color:var(--line-strong); color:var(--ink-dim); white-space:nowrap;}
-.export-xlsx:hover{border-color:var(--accent); color:var(--ink); background:var(--surface2);}
-.barre-export{display:flex; justify-content:flex-end; margin:0 0 10px;}
-.filtre-tbl .export-xlsx{margin-left:auto;}
 
 /* ---------- Filtre de tableau ---------- */
 /* Elle se replie : a 375 px, le champ (300 px), le compte de lignes et
@@ -531,6 +542,10 @@ const C = {
   accentMark:CSSVAR('--accent-mark'),
   compare:CSSVAR('--compare'),
   seq:[1,2,3,4,5,6,7,8].map(i=>CSSVAR('--seq-'+i)),
+  /* Series categorielles. cat[0..4] : des natures differentes, sans
+     ordre entre elles. Ne pas y prendre une teinte pour representer une
+     gradation -- c'est le role de seq. */
+  cat:[1,2,3,4,5].map(i=>CSSVAR('--cat-'+i)),
 };
 
 /* =====================================================================
@@ -958,6 +973,168 @@ const pctBarres = (axe, decimales) => ({
   },
 });
 
+/* =====================================================================
+   GREFFONS DE GRAPHIQUE, COMMUNS AUX ETABLISSEMENTS
+   ---------------------------------------------------------------------
+   Ils vivaient dans le rendu de TABOO, ou AMNESIA ne pouvait pas les
+   atteindre : ses graphiques n'avaient donc aucune valeur ecrite, et il
+   fallait survoler chaque barre pour lire un chiffre. Inscrire la part
+   ou le montant sur la marque elle-meme est ce qui permet de lire une
+   page en diagonale, sans souris.
+   ===================================================================== */
+
+/* Claire sur fond sombre, sombre sur fond clair -- decide par la
+   luminance relative, comme le fait le calcul de contraste WCAG. */
+function encreSur(fond){
+  const m = /^#([0-9a-f]{6})$/i.exec(String(fond || '').trim());
+  if(!m) return '#FFFFFF';
+  const v = i => {
+    const c = parseInt(m[1].substr(i * 2, 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const L = 0.2126 * v(0) + 0.7152 * v(1) + 0.0722 * v(2);
+  return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? '#FFFFFF' : '#0B0906';
+}
+
+/* Part de chaque secteur, inscrite dans l'anneau. */
+const pctAnneau = () => ({
+  id: 'pctA' + Math.random().toString(36).slice(2, 7),
+  afterDatasetsDraw(ch) {
+    const meta = ch.getDatasetMeta(0);
+    const data = ch.data.datasets[0].data;
+    const total = data.reduce((a, b, i) =>
+      a + (ch.getDataVisibility(i) ? (b || 0) : 0), 0);
+    if (!total) return;
+    const ctx = ch.ctx;
+    ctx.save();
+    ctx.font = "600 11.5px 'Inter',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    meta.data.forEach((arc, i) => {
+      if (!ch.getDataVisibility(i)) return;
+      const pct = 100 * (data[i] || 0) / total;
+      // Un secteur trop fin ne peut pas contenir son etiquette.
+      if (pct < 4) return;
+      const {x, y} = arc.getCenterPoint();
+      // Encre sombre sur les teintes claires, claire sur les sombres :
+      // une etiquette blanche sur jaune serait illisible.
+      // L'encre est CALCULEE a partir du secteur, plus enumeree : la
+      // liste de teintes claires qui tenait ici devenait fausse des
+      // qu'une palette changeait, et AMNESIA vient d'en changer.
+      ctx.fillStyle = encreSur(ch.data.datasets[0].backgroundColor[i]);
+      ctx.fillText(F1(pct) + ' %', x, y);
+    });
+    ctx.restore();
+  },
+});
+
+/* Ajoute la part au texte d'une infobulle, sans remplacer le montant. */
+/* Plage de reference (norme metier) dessinee en fond d'un graphique.
+   Un rectangle discret vaut mieux qu'une legende a lire ailleurs. */
+const bandePlugin = (min,max,label) => ({
+  id:'bande'+min+max,
+  beforeDatasetsDraw(ch){
+    const {ctx, chartArea:a, scales} = ch;
+    const sc = scales.y || scales.x;
+    if(!sc) return;
+    const y1 = sc.getPixelForValue(max), y2 = sc.getPixelForValue(min);
+    ctx.save();
+    ctx.fillStyle = 'rgba(242,237,225,.055)';
+    ctx.fillRect(a.left, y1, a.right-a.left, y2-y1);
+    ctx.strokeStyle = 'rgba(242,237,225,.16)';
+    ctx.setLineDash([3,3]); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(a.left,y1); ctx.lineTo(a.right,y1);
+    ctx.moveTo(a.left,y2); ctx.lineTo(a.right,y2); ctx.stroke();
+    ctx.setLineDash([]);
+    if(label){
+      ctx.fillStyle = 'rgba(242,237,225,.42)';
+      ctx.font = "10.5px 'Inter',sans-serif"; ctx.textAlign = 'right';
+      ctx.fillText(label, a.right-6, y1-4);
+    }
+    ctx.restore();
+  }
+});
+/* Etiquettes de valeur directement sur les barres : evite d'obliger le
+   lecteur a estimer une hauteur contre une graduation. Applique
+   selectivement (jamais sur chaque point d'une courbe). */
+const etiquettesPlugin = (fmt, axe, alterner, base) => ({
+  id:'etiq'+Math.random().toString(36).slice(2,7),
+  afterDatasetsDraw(ch){
+    const ctx = ch.ctx; ctx.save();
+    ctx.font = (alterner?"600 10px":"600 11px")+" 'Inter',sans-serif"; ctx.fillStyle = C.ink;
+    ch.data.datasets.forEach((ds,di)=>{
+      if(ds.hidden) return;
+      const meta = ch.getDatasetMeta(di);
+      if(meta.hidden) return;
+      meta.data.forEach((el,i)=>{
+        const raw = ds.data[i];
+        const v = Array.isArray(raw) ? raw[1]-raw[0] : raw;
+        if(v===null||v===undefined||v===0) return;
+        if(axe==='y'){ ctx.textAlign='left'; ctx.textBaseline='middle';
+          ctx.fillText(fmt(v), el.x+7, el.y);
+        }else{ ctx.textAlign='center'; ctx.textBaseline='bottom';
+          // decalage alterne : sur une cascade, les barres sont assez
+          // proches pour que deux etiquettes voisines se chevauchent.
+          const dy = alterner && (i % 2) ? -17 : -5;
+          if(base){
+            // Deux lignes : le montant, puis sa part juste dessous. La
+            // part n'est PAS dessinee sous l'axe, ou elle recouvrirait
+            // les noms d'etapes deja ecrits par Chart.js.
+            ctx.fillText(fmt(v), el.x, el.y+dy-11);
+            const police = ctx.font, encre = ctx.fillStyle;
+            ctx.font = "10px 'Inter',sans-serif"; ctx.fillStyle = C.dim;
+            ctx.fillText(F1(100*Math.abs(v)/base)+' %', el.x, el.y+dy);
+            ctx.font = police; ctx.fillStyle = encre;
+          } else {
+            ctx.fillText(fmt(v), el.x, el.y+dy);
+          } }
+      });
+    });
+    ctx.restore();
+  }
+});
+
+/* Une valeur ecrite au-dessus de chaque colonne, quelle que soit la
+   forme du graphique dessous -- pile, groupe, ou barre simple.
+
+   pctBarres et pctAnneau calculent une part du TOTAL AFFICHE. Sur une
+   serie mensuelle, ce n'est pas la question : on ne veut pas savoir ce
+   que juillet pese dans l'annee, mais ce que les charges de juillet
+   pesent dans le chiffre d'affaires DE JUILLET. Le denominateur change
+   a chaque colonne, et aucun des deux autres greffons ne sait le faire.
+
+   `valeurs[i]` est donc fourni par l'appelant, deja calcule, et `fmt`
+   dit comment l'ecrire. Le greffon ne fait que le placer. */
+const etiquetteSommet = (valeurs, fmt) => ({
+  id: 'som' + Math.random().toString(36).slice(2, 7),
+  afterDatasetsDraw(ch) {
+    const ctx = ch.ctx;
+    ctx.save();
+    ctx.font = "600 10px 'Inter',sans-serif";
+    ctx.fillStyle = C.dim;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    // Le sommet d'une colonne est le point le plus HAUT a l'ecran,
+    // toutes series visibles confondues : la pile n'est pas forcement
+    // la plus haute, une ligne peut la depasser.
+    const hauts = [];
+    ch.data.datasets.forEach((ds, di) => {
+      if (!ch.isDatasetVisible(di)) return;
+      ch.getDatasetMeta(di).data.forEach((el, i) => {
+        if (hauts[i] === undefined || el.y < hauts[i]) hauts[i] = el.y;
+      });
+    });
+    hauts.forEach((y, i) => {
+      const v = valeurs[i];
+      if (v === null || v === undefined || !isFinite(v)) return;
+      const el = ch.getDatasetMeta(0).data[i];
+      if (!el) return;
+      ctx.fillText(fmt(v), el.x, y - 6);
+    });
+    ctx.restore();
+  },
+});
+
 /* ---------- Briques d'affichage, communes aux etablissements ----------
    Elles vivaient dans le rendu de TABOO, ou AMNESIA ne pouvait pas les
    atteindre : sa premiere page est morte sur « tuile is not defined ».
@@ -1119,9 +1296,6 @@ function render(id){
   if(!f) return;
   try{
     f();
-    // Les boutons d'export se posent APRES le rendu : les tableaux
-    // n'existent pas avant, et un tableau refait doit retrouver le sien.
-    if(typeof ajouterExports === 'function') ajouterExports();
   }
   catch(err){
     // Un renderer qui echoue ne doit pas emporter tout le dashboard :

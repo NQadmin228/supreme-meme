@@ -90,6 +90,27 @@ export const ETABLISSEMENTS = [
       '--accent':      '#EACE65',   // 12,12:1
       '--accent-mark': '#C9A227',   //  7,79:1 — marque de serie unique
       '--compare':     '#5AA9DE',   //  7,32:1 — 2e serie, DE 91 face a l'or
+
+      /* Series categorielles, cherchees et non choisies.
+         Contraintes tenues simultanement sur le fond #14110B :
+           - contraste entre 3,2:1 et 9:1 — la borne HAUTE compte
+             autant : une teinte a 16:1 sur ce fond eblouit et vole
+             l'attention a la donnee ;
+           - rouge et vert franc exclus : ils portent deja un etat
+             (critique, favorable) et, sur un compte de resultat, se
+             lisent comme perte et benefice. Aucune de ces charges n'a
+             de valence ;
+           - l'or de la marque entre dans la comparaison : il porte la
+             ligne du chiffre d'affaires et croise toutes les series.
+         Ecart CIEDE2000 minimal entre TOUTES les paires, l'or compris :
+           normal 15,4 · deuteranopie 15,2 · protanopie 16,7 ·
+           tritanopie 15,3.
+         La rampe bleue qu'elles remplacent tombait a 7,1. */
+      '--cat-1':       '#24a4db',   //  6,65:1
+      '--cat-2':       '#ca72b0',   //  5,87:1
+      '--cat-3':       '#70a33e',   //  6,28:1
+      '--cat-4':       '#3ea37a',   //  6,03:1
+      '--cat-5':       '#9b81da',   //  5,87:1
     },
   },
 ];
