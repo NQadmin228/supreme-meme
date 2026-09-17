@@ -1458,23 +1458,34 @@ RENDER['couts'] = function(){
   const matSaison = saison.reduce((s, x) => s + x.matiere, 0);
   const tauxConstate = caSaison ? PCT(caSaison - matSaison, caSaison) : null;
 
+  /* Trois mesures de la meme chose, de plus en plus proches du reel :
+
+       marge sur les ventes    ce que le vendu aurait du rapporter
+       apres cout des offerts  ce qu'il a rapporte, gratuites deduites
+       marge constatee         ce que les achats du classeur montrent
+
+     La premiere ignore que l'etablissement achete aussi ce qu'il
+     donne. La deuxieme le compte. La troisieme ne vient d'aucune des
+     deux et couvre 100 % du perimetre. */
+  const margeApresOfferts = ca - cout - offert;
+
   document.getElementById('ct-kpi').innerHTML = [
-    tuile({k: 'MARGE SUR LE PÉRIMÈTRE COUVERT', v: Fc(marge), u: 'F', hero: true,
+    tuile({k: 'MARGE SUR LES VENTES', v: Fc(marge), u: 'F', hero: true,
            cls: 'accent',
-           d: F1(PCT(marge, ca)) + ' % de taux de marge · ' + F(arts.length)
-              + ' articles'}),
+           d: F1(PCT(marge, ca)) + ' % de taux · ' + F(arts.length)
+              + ' articles costés'}),
     tuile({k: 'PART DU CA COUVERTE', v: F1(100 * (m.couverture || 0)), u: '%',
            cls: (m.couverture || 0) < 0.6 ? 'warn' : '',
            d: F(m.ca_couvert) + ' F sur ' + F(m.ca_total) + ' F'}),
     tuile({k: 'COÛT DE CE QUI EST OFFERT', v: Fc(offert), u: 'F', cls: 'crit',
-           d: "ce que les articles offerts ont réellement coûté à l'achat"}),
-    tuile({k: 'MARGE CONSTATÉE AU CLASSEUR',
-           v: tauxConstate === null ? '—' : F1(tauxConstate), u: '%',
+           d: F1(PCT(offert, ca)) + " % du chiffre couvert, acheté et donné"}),
+    tuile({k: 'MARGE APRÈS LES OFFERTS', v: F1(PCT(margeApresOfferts, ca)), u: '%',
            d: tauxConstate === null ? 'classeur mensuel absent'
-              : 'sur 100 % du périmètre, par les achats réels'}),
+              : F1(tauxConstate) + ' % constatés au classeur, sur 100 % du périmètre'}),
   ].join('');
 
-  const ecart = tauxConstate === null ? null : PCT(marge, ca) - tauxConstate;
+  const ecart = tauxConstate === null ? null
+                : PCT(margeApresOfferts, ca) - tauxConstate;
   document.getElementById('ct-constat').innerHTML = constat(
     'warn', "Des coûts mesurés ailleurs, et ce qu'ils valent ici",
     `Les exports de caisse d'AMNESIA ne portent <b>aucun prix d'achat</b>. Les
@@ -1486,20 +1497,26 @@ RENDER['couts'] = function(){
      articles peu remisés — sodas, bières, chichas — le prix moyen constaté chez
      AMNESIA vaut exactement celui affiché chez TABOO. L'écart n'apparaît que sur
      les bouteilles, où il mesure la remise accordée et non un tarif différent.
-     ${ecart === null ? '' : `Et les deux mesures de marge se répondent :
-       <b>${F1(PCT(marge, ca))} %</b> par les coûts importés,
-       <b>${F1(tauxConstate)} %</b> par les achats réels du classeur, soit
-       ${F1(Math.abs(ecart))} point${Math.abs(ecart) > 1 ? 's' : ''} d'écart.
-       Un achat n'est pas une consommation — le stock bouge entre les deux — et les
-       deux périodes ne se recouvrent pas exactement : un écart de cet ordre était
-       attendu.`}
-     <br><br><b>La limite, et elle est basse.</b> TABOO ne connaît le coût que de
-     ${F(m.articles_costes_taboo)} de ses ${F(m.articles_catalogue_taboo)} articles.
-     Ce n'est pas un problème d'écriture des noms : Moët, Laurent-Perrier, Martell,
-     Jack Daniel's, Chivas et Glenfiddich figurent bien à son catalogue, sans coût.
-     La marge par produit d'AMNESIA porte donc sur
-     <b>${F1(100 * (m.couverture || 0))} %</b> de son chiffre d'affaires, et rien
-     n'est extrapolé au reste.`);
+     ${ecart === null ? '' : `<br><br><b>Et trois mesures se rejoignent.</b>
+       Les articles vendus auraient dû rapporter <b>${F1(PCT(marge, ca))} %</b>.
+       Mais l'établissement achète aussi ce qu'il donne : en déduisant le coût
+       réel des articles offerts, il reste <b>${F1(PCT(margeApresOfferts, ca))} %</b>.
+       Le classeur, lui, mesure <b>${F1(tauxConstate)} %</b> par les achats réels,
+       sur 100 % du périmètre et sans partager une seule donnée avec les coûts
+       importés. ${F1(Math.abs(ecart))} point${Math.abs(ecart) > 1 ? 's' : ''}
+       séparent les deux dernières — un achat n'est pas une consommation, le stock
+       bouge entre les deux, et les périodes ne se recouvrent pas tout à fait.
+       <br><br>Ce rapprochement dit deux choses : les coûts empruntés à TABOO
+       tiennent, et <b>les articles offerts expliquent l'essentiel de l'écart</b>
+       entre ce que la carte promet et ce que la caisse encaisse.`}
+     <br><br><b>Ce qui reste hors de portée.</b> Le référentiel de TABOO compte
+     ${F(m.produits_referentiel)} produits costés, et
+     ${F(m.sans_cout)} articles d'AMNESIA n'y figurent pas
+     (${F(m.ca_sans_cout)} F) — Baron d'Arignac, Don Julio, Louis Eschenauer, les
+     shooters. ${F(m.rejetes)} autres ont trouvé un nom correspondant mais ont été
+     <b>écartés par le contrôle de prix</b> (${F(m.ca_rejete)} F) : un « Hennessy VS »
+     vendu au verre ne coûte pas le prix d'une bouteille. Rien n'est extrapolé à
+     ces articles-là.`);
 
   /* --- par famille ---------------------------------------------------- */
   const fam = new Map();
@@ -1580,18 +1597,47 @@ RENDER['couts'] = function(){
     [{t: 'Article'}, {t: 'Famille'}, {t: 'Vendus', num: true},
      {t: "Chiffre d'affaires", num: true}, {t: 'Coût unitaire', num: true},
      {t: 'Coût total', num: true}, {t: 'Marge', num: true}, {t: 'Taux', num: true},
-     {t: 'Offerts', num: true}, {t: 'Coût des offerts', num: true}],
+     {t: 'Offerts', num: true}, {t: 'Coût des offerts', num: true},
+     {t: 'Coût repris de'}, {t: 'Règle'}],
     arts.map(x => [x.a, x.c, F(x.q), F(x.net), F(x.cr), F(x.ct), F(x.net - x.ct),
-                   F1(PCT(x.net - x.ct, x.net)) + ' %', F(x.qo), F(x.co)]));
+                   F1(PCT(x.net - x.ct, x.net)) + ' %', F(x.qo), F(x.co),
+                   x.correspondance, x.regle]));
   rendreFiltrable('ct-table', 'Filtrer : CHAMPAGNES, HENNESSY, BIERES…');
+
+  /* --- comment chaque cout a ete rapproche -------------------------------
+     La regle est ecrite a cote de chaque article dans le tableau du
+     dessus ; ici on donne le compte, pour qu'on puisse juger du poids
+     de chacune sans les compter a la main. */
+  const regles = m.regles || [];
+  document.getElementById('ct-regles').innerHTML =
+    tableHTML([{t: 'Règle'}, {t: 'Articles', num: true},
+               {t: "Chiffre d'affaires", num: true}, {t: 'Couverture atteinte', num: true}],
+      (() => {
+        let cumul = 0;
+        return regles.map(r => {
+          cumul += r.ca;
+          return [r.regle, F(r.n), F(r.ca), F1(PCT(cumul, m.ca_total)) + ' %'];
+        });
+      })())
+    + `<div class="foot" style="margin-top:12px">
+        « Nom identique » compare les noms une fois les accents, les esperluettes
+        et les suffixes de conditionnement normalisés. « Variante par défaut »
+        rapproche un champagne nommé sans qualificatif de son brut, et seulement
+        s'il n'existe qu'un seul candidat. « Préfixe unique » rapproche un nom au
+        seul produit costé qui le prolonge ; s'il y en a deux, la règle se tait.
+        <br><br>Chaque rapprochement est ensuite vérifié sur le prix : si le prix
+        pratiqué par AMNESIA s'écarte de plus de moitié de celui affiché par
+        TABOO, ce n'est pas le même produit et le coût n'est pas appliqué.
+       </div>`;
 
   /* --- le trou ----------------------------------------------------------- */
   const abs = c.non_apparies || [];
+  const rej = c.rejetes || [];
   document.getElementById('ct-absents').innerHTML =
     `<div class="foot" style="margin-bottom:12px">
-       ${F(c.non_apparies_total)} articles vendus par AMNESIA n'ont pas de coût
-       chez TABOO, pour ${F(c.non_apparies_ca)} F de chiffre d'affaires. Les
-       ${F(abs.length)} plus gros sont listés ici : obtenir leur prix d'achat
+       ${F(m.sans_cout)} articles vendus par AMNESIA n'ont aucun coût au
+       référentiel de TABOO, pour ${F(m.ca_sans_cout)} F de chiffre d'affaires.
+       Les ${F(abs.length)} plus gros sont listés ici : obtenir leur prix d'achat
        ferait passer la couverture de ${F1(100 * (m.couverture || 0))} % à
        ${F1(100 * ((m.ca_couvert + abs.reduce((s, x) => s + x.net, 0)) / m.ca_total))} %.
      </div>`
@@ -1599,6 +1645,18 @@ RENDER['couts'] = function(){
       [{t: 'Article'}, {t: 'Famille'}, {t: 'Type'}, {t: 'Vendus', num: true},
        {t: "Chiffre d'affaires", num: true}, {t: '% du CA total', num: true}],
       abs.map(x => [x.a, x.c, x.t, F(x.q), F(x.net),
-                    F1(PCT(x.net, m.ca_total)) + ' %']));
-  rendreFiltrable('ct-absents', 'Filtrer : CHAMPAGNES, WHISKY…');
+                    F1(PCT(x.net, m.ca_total)) + ' %']))
+    + (rej.length ? `<div style="margin-top:22px;margin-bottom:8px">
+         <b>${F(rej.length)} articles écartés par le contrôle de prix</b></div>
+       <div class="foot" style="margin-bottom:12px">
+         Un nom correspondait, le prix disait le contraire. AMNESIA vend ces
+         articles au verre, le référentiel les cote à la bouteille : leur
+         appliquer ce coût aurait affiché des marges violemment négatives.
+       </div>`
+       + tableHTML(
+         [{t: 'Article vendu'}, {t: 'Correspondance écartée'},
+          {t: 'Prix AMNESIA', num: true}, {t: 'Prix TABOO', num: true},
+          {t: "Chiffre d'affaires", num: true}],
+         rej.map(x => [x.a, x.correspondance, F(x.pv_amnesia), F(x.pv_taboo),
+                       F(x.net)])) : '');
 };
