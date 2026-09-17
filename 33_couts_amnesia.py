@@ -218,6 +218,24 @@ def principal():
         liste.sort(key=lambda x: -x["net"])
 
     ca_couvert = sum(x["net"] for x in articles)
+
+    # Combien de prix faut-il obtenir pour atteindre quelle couverture ?
+    # C'est la seule question qui compte une fois le trou constate, et
+    # elle se repond en additionnant les manquants du plus gros au plus
+    # petit.
+    seuils, cumul, restants = [], ca_couvert, list(absents)
+    for cible in (0.92, 0.95, 0.97, 0.99):
+        n, c = 0, cumul
+        for x in restants:
+            if c / ca_total >= cible:
+                break
+            c += x["net"]
+            n += 1
+        if c / ca_total >= cible:
+            seuils.append({"cible": cible, "n": n})
+    for i, x in enumerate(absents):
+        cumul += x["net"]
+        x["cumul"] = cumul / ca_total if ca_total else 0
     par_regle = collections.Counter(x["regle"] for x in articles)
     ca_regle = collections.defaultdict(float)
     for x in articles:
@@ -248,7 +266,11 @@ def principal():
         },
         "articles": articles,
         "rejetes": rejetes,
-        "non_apparies": absents[:60],
+        # Tous les manquants, pas seulement les plus gros : la page en
+        # fait une liste de demande, et une liste tronquee ferait croire
+        # que le reste n'existe pas. Le cumul dit ou s'arreter.
+        "non_apparies": absents,
+        "seuils": seuils,
     }
 
     CIBLE.write_text(json.dumps(sortie, ensure_ascii=False,

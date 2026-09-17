@@ -1630,33 +1630,56 @@ RENDER['couts'] = function(){
         TABOO, ce n'est pas le même produit et le coût n'est pas appliqué.
        </div>`;
 
-  /* --- le trou ----------------------------------------------------------- */
+  /* --- la liste de ce qu'il faut demander ---------------------------------
+     Constater un trou ne sert a rien ; le combler, si. Cette carte n'est
+     donc pas un inventaire des absents mais une liste de COURSES, du
+     plus rentable au moins rentable, avec la couverture que chaque prix
+     obtenu fait gagner. On sait ou s'arreter. */
   const abs = c.non_apparies || [];
   const rej = c.rejetes || [];
+  const seuils = c.seuils || [];
+
   document.getElementById('ct-absents').innerHTML =
-    `<div class="foot" style="margin-bottom:12px">
-       ${F(m.sans_cout)} articles vendus par AMNESIA n'ont aucun coût au
-       référentiel de TABOO, pour ${F(m.ca_sans_cout)} F de chiffre d'affaires.
-       Les ${F(abs.length)} plus gros sont listés ici : obtenir leur prix d'achat
-       ferait passer la couverture de ${F1(100 * (m.couverture || 0))} % à
-       ${F1(100 * ((m.ca_couvert + abs.reduce((s, x) => s + x.net, 0)) / m.ca_total))} %.
+    `<div style="margin-bottom:14px">
+       <b>${F(m.sans_cout)} articles</b> vendus par AMNESIA n'ont aucun prix
+       d'achat, ni dans le référentiel de TABOO ni dans aucune autre source
+       disponible — ${F(m.ca_sans_cout)} F de chiffre d'affaires, soit
+       ${F1(PCT(m.ca_sans_cout, m.ca_total))} %. Ils ne s'obtiennent que d'une
+       facture fournisseur.
      </div>`
+    + (seuils.length ? `<div style="margin-bottom:14px">` + seuils.map(s =>
+        `<span class="pill">${F(s.n)} prix → ${F1(100 * s.cible)} %</span> `
+      ).join('') + `</div>
+      <div class="foot" style="margin-bottom:14px">
+        Les articles sont classés du plus lourd au plus léger : dix prix
+        d'achat suffisent à passer de ${F1(100 * (m.couverture || 0))} % à 95 %
+        de couverture. Les suivants rapportent de moins en moins.
+      </div>` : '')
     + tableHTML(
-      [{t: 'Article'}, {t: 'Famille'}, {t: 'Type'}, {t: 'Vendus', num: true},
-       {t: "Chiffre d'affaires", num: true}, {t: '% du CA total', num: true}],
-      abs.map(x => [x.a, x.c, x.t, F(x.q), F(x.net),
-                    F1(PCT(x.net, m.ca_total)) + ' %']))
-    + (rej.length ? `<div style="margin-top:22px;margin-bottom:8px">
-         <b>${F(rej.length)} articles écartés par le contrôle de prix</b></div>
-       <div class="foot" style="margin-bottom:12px">
-         Un nom correspondait, le prix disait le contraire. AMNESIA vend ces
-         articles au verre, le référentiel les cote à la bouteille : leur
-         appliquer ce coût aurait affiché des marges violemment négatives.
+      [{t: 'À demander'}, {t: 'Famille'}, {t: 'Vendus', num: true},
+       {t: "Chiffre d'affaires", num: true}, {t: '% du CA', num: true},
+       {t: 'Couverture atteinte', num: true}],
+      abs.map(x => [x.a, x.c, F(x.q), F(x.net),
+                    F1(PCT(x.net, m.ca_total)) + ' %',
+                    F1(100 * (x.cumul || 0)) + ' %']))
+    + (rej.length ? `<div style="margin-top:26px;margin-bottom:8px">
+         <b>${F(rej.length)} articles vendus au verre — une seule question les
+         débloque</b></div>
+       <div style="margin-bottom:12px">
+         Pour ceux-là le prix d'achat <b>est connu</b> : c'est celui de la
+         bouteille. Ce qui manque est le nombre de verres qu'on en tire. Le
+         référentiel de TABOO porte bien une ligne « VERRE » pour chacun, mais
+         avec son prix de vente seulement, la colonne de coût est vide — TABOO
+         n'a jamais costé un verre non plus.
+         <br><br>Les appliquer au coût de la bouteille aurait affiché des marges
+         de l'ordre de moins 500 %. Ils sont donc écartés, pour
+         ${F(m.ca_rejete)} F de chiffre d'affaires. Un seul chiffre par produit
+         — combien de verres par bouteille — les ramènerait tous.
        </div>`
        + tableHTML(
-         [{t: 'Article vendu'}, {t: 'Correspondance écartée'},
-          {t: 'Prix AMNESIA', num: true}, {t: 'Prix TABOO', num: true},
+         [{t: 'Article vendu au verre'}, {t: 'Prix du verre', num: true},
+          {t: 'Prix de la bouteille', num: true},
           {t: "Chiffre d'affaires", num: true}],
-         rej.map(x => [x.a, x.correspondance, F(x.pv_amnesia), F(x.pv_taboo),
-                       F(x.net)])) : '');
+         rej.map(x => [x.a, F(x.pv_amnesia), F(x.pv_taboo), F(x.net)])) : '');
+  rendreFiltrable('ct-absents', 'Filtrer : VINS, TEQUILA, SHOOTERS…');
 };
