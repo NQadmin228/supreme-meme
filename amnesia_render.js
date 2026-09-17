@@ -1513,10 +1513,16 @@ RENDER['couts'] = function(){
      ${F(m.produits_referentiel)} produits costés, et
      ${F(m.sans_cout)} articles d'AMNESIA n'y figurent pas
      (${F(m.ca_sans_cout)} F) — Baron d'Arignac, Don Julio, Louis Eschenauer, les
-     shooters. ${F(m.rejetes)} autres ont trouvé un nom correspondant mais ont été
-     <b>écartés par le contrôle de prix</b> (${F(m.ca_rejete)} F) : un « Hennessy VS »
-     vendu au verre ne coûte pas le prix d'une bouteille. Rien n'est extrapolé à
-     ces articles-là.`);
+     shooters. ${m.rejetes ? `${F(m.rejetes)} autres ont trouvé un nom correspondant
+     mais ont été <b>écartés par le contrôle de prix</b> (${F(m.ca_rejete)} F).`
+     : ''}
+     <br><br><b>Les articles vendus au verre.</b> Un « Hennessy VS » au verre ne
+     coûte pas le prix d'une bouteille. La direction indique qu'une bouteille
+     donne <b>${F(m.verres_par_bouteille)} verres</b> ; le coût est divisé
+     d'autant. Ce nombre n'est relevé nulle part — mais il se vérifie : les
+     articles concernés se vendent entre 0,86 et 1,05 fois le douzième du tarif
+     bouteille, ce que le contrôle de prix constate sans rien savoir du chiffre.
+     La règle est écrite en face de chaque article dans le tableau.`);
 
   /* --- par famille ---------------------------------------------------- */
   const fam = new Map();
@@ -1625,9 +1631,14 @@ RENDER['couts'] = function(){
         rapproche un champagne nommé sans qualificatif de son brut, et seulement
         s'il n'existe qu'un seul candidat. « Préfixe unique » rapproche un nom au
         seul produit costé qui le prolonge ; s'il y en a deux, la règle se tait.
+        « Vendu au verre » s'applique quand le prix révèle que l'unité de vente
+        n'est pas la bouteille : le coût est alors divisé par
+        ${F(m.verres_par_bouteille)}, nombre de verres par bouteille indiqué par
+        la direction.
         <br><br>Chaque rapprochement est ensuite vérifié sur le prix : si le prix
         pratiqué par AMNESIA s'écarte de plus de moitié de celui affiché par
-        TABOO, ce n'est pas le même produit et le coût n'est pas appliqué.
+        TABOO — pour l'unité retenue — ce n'est pas le même produit et le coût
+        n'est pas appliqué.
        </div>`;
 
   /* --- la liste de ce qu'il faut demander ---------------------------------
@@ -1663,23 +1674,17 @@ RENDER['couts'] = function(){
                     F1(PCT(x.net, m.ca_total)) + ' %',
                     F1(100 * (x.cumul || 0)) + ' %']))
     + (rej.length ? `<div style="margin-top:26px;margin-bottom:8px">
-         <b>${F(rej.length)} articles vendus au verre — une seule question les
-         débloque</b></div>
+         <b>${F(rej.length)} articles écartés par le contrôle de prix</b></div>
        <div style="margin-bottom:12px">
-         Pour ceux-là le prix d'achat <b>est connu</b> : c'est celui de la
-         bouteille. Ce qui manque est le nombre de verres qu'on en tire. Le
-         référentiel de TABOO porte bien une ligne « VERRE » pour chacun, mais
-         avec son prix de vente seulement, la colonne de coût est vide — TABOO
-         n'a jamais costé un verre non plus.
-         <br><br>Les appliquer au coût de la bouteille aurait affiché des marges
-         de l'ordre de moins 500 %. Ils sont donc écartés, pour
-         ${F(m.ca_rejete)} F de chiffre d'affaires. Un seul chiffre par produit
-         — combien de verres par bouteille — les ramènerait tous.
+         Un nom correspondait, le prix disait le contraire, et l'hypothèse du
+         verre ne les rattrape pas non plus. ${F(m.ca_rejete)} F de chiffre
+         d'affaires, sans coût plutôt qu'avec un faux.
        </div>`
        + tableHTML(
-         [{t: 'Article vendu au verre'}, {t: 'Prix du verre', num: true},
-          {t: 'Prix de la bouteille', num: true},
+         [{t: 'Article vendu'}, {t: 'Correspondance écartée'},
+          {t: 'Prix AMNESIA', num: true}, {t: 'Prix TABOO', num: true},
           {t: "Chiffre d'affaires", num: true}],
-         rej.map(x => [x.a, F(x.pv_amnesia), F(x.pv_taboo), F(x.net)])) : '');
+         rej.map(x => [x.a, x.correspondance, F(x.pv_amnesia), F(x.pv_taboo),
+                       F(x.net)])) : '');
   rendreFiltrable('ct-absents', 'Filtrer : VINS, TEQUILA, SHOOTERS…');
 };

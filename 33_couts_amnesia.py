@@ -95,6 +95,23 @@ PRIX_MIN, PRIX_MAX = 0.45, 1.6
 # Le qualificatif qui designe la declinaison par defaut d'un produit.
 QUALIFICATIF_DEFAUT = {"BRUT"}
 
+# Nombre de verres tires d'une bouteille de spiritueux.
+#
+# Ce nombre est DONNE par la direction, il n'est releve nulle part : ni
+# le referentiel ni le classeur ne le portent. Il n'est pas non plus
+# devine -- le deduire du rapport des prix aurait produit une marge
+# d'apparence credible sans qu'aucune mesure ne la soutienne.
+#
+# Mais il se VERIFIE. Si une maison tire douze verres d'une bouteille,
+# elle vend le verre autour du douzieme du prix de la bouteille, et le
+# controle de prix le constate tout seul : les sept articles concernes
+# tombent entre 0,86 et 1,05 fois le douzieme du tarif bouteille. Le
+# chiffre est donc corrobore par une donnee qui ne vient pas de lui.
+#
+# Le changer ici suffit : la page affiche la valeur employee et les
+# marges se recalculent.
+VERRES_PAR_BOUTEILLE = 12
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -176,11 +193,22 @@ def principal():
         for cout, regle in candidats(a):
             pv = num(cout.get("prix_vente"))
             rapport = ((v["net"] / v["q"]) / pv) if (pv and v["q"]) else None
-            if rapport is not None and not (PRIX_MIN <= rapport <= PRIX_MAX):
-                rejet = rejet or (cout, regle, rapport, pv)
-                continue
-            retenu = (cout, regle, rapport)
-            break
+            if rapport is None or PRIX_MIN <= rapport <= PRIX_MAX:
+                retenu = (cout, regle, rapport, 1)
+                break
+
+            # Le prix dit que ce n'est pas la meme unite de vente. Avant
+            # d'ecarter, on essaie la seule autre unite que la maison
+            # pratique : le verre. Si le prix constate colle alors au
+            # douzieme du tarif bouteille, c'est bien un verre -- et le
+            # cout se divise de la meme facon.
+            rapport_verre = rapport * VERRES_PAR_BOUTEILLE
+            if PRIX_MIN <= rapport_verre <= PRIX_MAX:
+                retenu = (cout, "vendu au verre", rapport_verre,
+                          VERRES_PAR_BOUTEILLE)
+                break
+
+            rejet = rejet or (cout, regle, rapport, pv)
 
         if retenu is None:
             base = {"t": t, "c": c, "a": a, "q": v["q"], "net": v["net"]}
@@ -196,8 +224,8 @@ def principal():
                 absents.append(base)
             continue
 
-        cout, regle, rapport = retenu
-        cr = num(cout["cout_revient"])
+        cout, regle, rapport, parts = retenu
+        cr = num(cout["cout_revient"]) / parts
         articles.append({
             "t": t, "c": c, "a": a,
             "q": v["q"], "qo": v["qo"],
@@ -205,7 +233,8 @@ def principal():
             "cr": round(cr, 2),
             "ct": round(cr * v["q"], 2),        # cout des articles VENDUS
             "co": round(cr * v["qo"], 2),       # cout des articles OFFERTS
-            "pv_taboo": num(cout.get("prix_vente")),
+            "pv_taboo": num(cout.get("prix_vente")) / parts,
+            "parts": parts,
             "src": cout.get("type_source", ""),
             "statut": cout.get("statut_cout", ""),
             "regle": regle,
@@ -258,7 +287,9 @@ def principal():
             "cout_offert": sum(x["co"] for x in articles),
             "regles": [{"regle": r, "n": par_regle[r], "ca": ca_regle[r]}
                        for r in ("nom identique", "variante par défaut",
-                                 "préfixe unique") if par_regle[r]],
+                                 "préfixe unique", "vendu au verre")
+                       if par_regle[r]],
+            "verres_par_bouteille": VERRES_PAR_BOUTEILLE,
             "rejetes": len(rejetes),
             "ca_rejete": sum(x["net"] for x in rejetes),
             "sans_cout": len(absents),
