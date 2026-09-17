@@ -1,0 +1,973 @@
+{
+  "version_registre": 2,
+  "projet": "VOTRE_PROJET_GCP",
+  "region": "europe-west1",
+  "jeux": [
+    {
+      "cle": "resultat_jour",
+      "libelle": "Compte de resultat quotidien",
+      "grain": "jour d'exploitation x activite",
+      "source": "reporting.v_resultat_jour",
+      "filtrable_par_date": true,
+      "colonne_date": "jour_exploitation",
+      "avertissement": "",
+      "dimensions": [
+        {
+          "cle": "d",
+          "colonne": "jour_exploitation",
+          "libelle": "Jour d'exploitation",
+          "format": "date"
+        },
+        {
+          "cle": "a",
+          "colonne": "activite",
+          "libelle": "Activite",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "cb",
+          "colonne": "ca_brut",
+          "libelle": "CA brut",
+          "format": "fcfa",
+          "description": "Avant remise. Champ TTC du POS, qui ne signifie pas 'toutes taxes comprises'."
+        },
+        {
+          "cle": "rm",
+          "colonne": "remise",
+          "libelle": "Remises",
+          "format": "fcfa",
+          "description": "Source de verite : balance par categorie. Le Journal CAF est ecarte."
+        },
+        {
+          "cle": "cn",
+          "colonne": "ca_net",
+          "libelle": "CA net",
+          "format": "fcfa",
+          "description": "Apres remise."
+        },
+        {
+          "cle": "qv",
+          "colonne": "quantite_vendue",
+          "libelle": "Quantite vendue",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "qo",
+          "colonne": "quantite_offerte",
+          "libelle": "Quantite offerte",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "ae",
+          "colonne": "achats_externes",
+          "libelle": "Achats externes",
+          "format": "fcfa",
+          "description": "Rattaches directement a l'activite, sans cle de repartition."
+        },
+        {
+          "cle": "op",
+          "colonne": "opex",
+          "libelle": "Charges d'exploitation",
+          "format": "fcfa",
+          "description": "Ventilees au prorata du CA net du jour, donc additives."
+        },
+        {
+          "cle": "cx",
+          "colonne": "capex",
+          "libelle": "Investissements",
+          "format": "fcfa",
+          "description": "Traites en charge de l'exercice, a la demande de l'etablissement."
+        },
+        {
+          "cle": "mb",
+          "colonne": "marge_brute",
+          "libelle": "Marge brute",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "re",
+          "colonne": "resultat_exploitation",
+          "libelle": "Resultat d'exploitation",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "rn",
+          "colonne": "resultat_net",
+          "libelle": "Resultat net",
+          "format": "fcfa",
+          "description": "Avant charges de personnel : aucune donnee RH dans les sources."
+        }
+      ]
+    },
+    {
+      "cle": "ventes_categorie_jour",
+      "libelle": "Ventes par categorie",
+      "grain": "jour x activite x categorie",
+      "source": "reporting.v_ventes_jour",
+      "filtrable_par_date": true,
+      "colonne_date": "jour_exploitation",
+      "avertissement": "",
+      "dimensions": [
+        {
+          "cle": "d",
+          "colonne": "jour_exploitation",
+          "libelle": "Jour d'exploitation",
+          "format": "date"
+        },
+        {
+          "cle": "t",
+          "colonne": "type",
+          "libelle": "Activite",
+          "format": "texte"
+        },
+        {
+          "cle": "c",
+          "colonne": "categorie",
+          "libelle": "Categorie",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "q",
+          "colonne": "quantite",
+          "libelle": "Quantite",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "cn",
+          "colonne": "ca_net",
+          "libelle": "CA net",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "cb",
+          "colonne": "ca_brut",
+          "libelle": "CA brut",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "rm",
+          "colonne": "remise",
+          "libelle": "Remises",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "articles",
+      "libelle": "Catalogue des articles",
+      "grain": "article (cumul sur toute la periode)",
+      "source": "reporting.v_ventes_jour",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "Cumul sur toute la periode : le classement ne reagit pas au filtre de dates.",
+      "dimensions": [
+        {
+          "cle": "t",
+          "colonne": "type",
+          "libelle": "Activite",
+          "format": "texte"
+        },
+        {
+          "cle": "c",
+          "colonne": "categorie",
+          "libelle": "Categorie",
+          "format": "texte"
+        },
+        {
+          "cle": "a",
+          "colonne": "article",
+          "libelle": "Article",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "q",
+          "colonne": "quantite",
+          "libelle": "Quantite vendue",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "cn",
+          "colonne": "ca_net",
+          "libelle": "CA net",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "cb",
+          "colonne": "ca_brut",
+          "libelle": "CA brut",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "rm",
+          "colonne": "remise",
+          "libelle": "Remises",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "nl",
+          "colonne": "nb_lignes",
+          "libelle": "Lignes de vente",
+          "format": "entier",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "horaire_jour",
+      "libelle": "Activite par tranche horaire",
+      "grain": "jour x heure x activite",
+      "source": "reporting.v_horaire_jour",
+      "filtrable_par_date": true,
+      "colonne_date": "jour_exploitation",
+      "avertissement": "Trier les axes horaires sur ordre_nuit, jamais sur l'heure : sinon minuit, qui est le pic, se retrouve a l'extreme gauche et la soiree parait coupee en deux.",
+      "dimensions": [
+        {
+          "cle": "d",
+          "colonne": "jour_exploitation",
+          "libelle": "Jour d'exploitation",
+          "format": "date"
+        },
+        {
+          "cle": "h",
+          "colonne": "heure_num",
+          "libelle": "Heure",
+          "format": "entier"
+        },
+        {
+          "cle": "on",
+          "colonne": "ordre_nuit",
+          "libelle": "Ordre dans la nuit",
+          "format": "entier"
+        },
+        {
+          "cle": "t",
+          "colonne": "type",
+          "libelle": "Activite",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "q",
+          "colonne": "quantite",
+          "libelle": "Quantite",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "cn",
+          "colonne": "ca_net",
+          "libelle": "CA net",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "depenses_jour",
+      "libelle": "Depenses par poste",
+      "grain": "jour x nature x poste",
+      "source": "reporting.v_depenses_jour",
+      "filtrable_par_date": true,
+      "colonne_date": "jour_exploitation",
+      "avertissement": "",
+      "dimensions": [
+        {
+          "cle": "d",
+          "colonne": "jour_exploitation",
+          "libelle": "Jour d'exploitation",
+          "format": "date"
+        },
+        {
+          "cle": "n",
+          "colonne": "nature",
+          "libelle": "Nature",
+          "format": "texte"
+        },
+        {
+          "cle": "p",
+          "colonne": "poste",
+          "libelle": "Poste",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "m",
+          "colonne": "montant",
+          "libelle": "Montant",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "offerts_jour",
+      "libelle": "Articles offerts par caissier",
+      "grain": "jour x caissier x categorie",
+      "source": "reporting.v_offerts_jour",
+      "filtrable_par_date": true,
+      "colonne_date": "jour_exploitation",
+      "avertissement": "",
+      "dimensions": [
+        {
+          "cle": "d",
+          "colonne": "jour_exploitation",
+          "libelle": "Jour d'exploitation",
+          "format": "date"
+        },
+        {
+          "cle": "c",
+          "colonne": "caissier",
+          "libelle": "Caissier",
+          "format": "texte"
+        },
+        {
+          "cle": "cat",
+          "colonne": "categorie",
+          "libelle": "Categorie",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "q",
+          "colonne": "quantite_offerte",
+          "libelle": "Quantite offerte",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "v",
+          "colonne": "valeur_offerte",
+          "libelle": "Valeur offerte",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "offerts_article",
+      "libelle": "Articles les plus offerts",
+      "grain": "categorie x article (cumul)",
+      "source": "reporting.v_offerts_jour",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "",
+      "dimensions": [
+        {
+          "cle": "cat",
+          "colonne": "categorie",
+          "libelle": "Categorie",
+          "format": "texte"
+        },
+        {
+          "cle": "a",
+          "colonne": "article",
+          "libelle": "Article",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "q",
+          "colonne": "quantite_offerte",
+          "libelle": "Quantite offerte",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "v",
+          "colonne": "valeur_offerte",
+          "libelle": "Valeur offerte",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "couts_articles",
+      "libelle": "Cout de revient par produit",
+      "grain": "produit (cumul)",
+      "source": "reporting.v_cout_revient",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "Un cout marque 'Partiel' est SOUS-EVALUE, donc sa marge est surevaluee. Le statut doit rester visible dans l'interface.",
+      "dimensions": [
+        {
+          "cle": "t",
+          "colonne": "activite",
+          "libelle": "Activite",
+          "format": "texte"
+        },
+        {
+          "cle": "c",
+          "colonne": "categorie",
+          "libelle": "Categorie",
+          "format": "texte"
+        },
+        {
+          "cle": "a",
+          "colonne": "article",
+          "libelle": "Produit",
+          "format": "texte"
+        },
+        {
+          "cle": "src",
+          "colonne": "type_source",
+          "libelle": "Atelier",
+          "format": "texte"
+        },
+        {
+          "cle": "st",
+          "colonne": "statut_cout",
+          "libelle": "Fiabilite du cout",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "cr",
+          "colonne": "cout_revient",
+          "libelle": "Cout de recette unitaire",
+          "format": "decimal",
+          "description": ""
+        },
+        {
+          "cle": "pv",
+          "colonne": "prix_vente",
+          "libelle": "Prix de vente de reference",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "q",
+          "colonne": "quantite",
+          "libelle": "Quantite vendue",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "cn",
+          "colonne": "ca_net",
+          "libelle": "CA net",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "cb",
+          "colonne": "ca_brut",
+          "libelle": "CA brut",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "rm",
+          "colonne": "remise",
+          "libelle": "Remises",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "ct",
+          "colonne": "cout_total",
+          "libelle": "Cout de recette cumule",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "mt",
+          "colonne": "marge_theorique",
+          "libelle": "Marge theorique",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "inventaire",
+      "libelle": "Inventaire",
+      "grain": "article",
+      "source": "reporting.v_inventaire",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "Tant que le comptage physique est nul, l'ecart n'est PAS une demarque : il vaut mecaniquement l'oppose du stock theorique.",
+      "dimensions": [
+        {
+          "cle": "cat",
+          "colonne": "categorie",
+          "libelle": "Categorie",
+          "format": "texte"
+        },
+        {
+          "cle": "a",
+          "colonne": "article",
+          "libelle": "Article",
+          "format": "texte"
+        },
+        {
+          "cle": "al",
+          "colonne": "sous_alerte",
+          "libelle": "Sous seuil d'alerte",
+          "format": "texte"
+        },
+        {
+          "cle": "seuil_param",
+          "colonne": "seuil_parametre",
+          "libelle": "Seuil parametre",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "qt",
+          "colonne": "qte_theorique",
+          "libelle": "Stock theorique",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "sa",
+          "colonne": "stock_alerte",
+          "libelle": "Seuil d'alerte",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "qp",
+          "colonne": "qte_physique",
+          "libelle": "Comptage physique",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "ec",
+          "colonne": "ecart",
+          "libelle": "Ecart",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "vs",
+          "colonne": "valeur_stock",
+          "libelle": "Stock valorise",
+          "format": "fcfa",
+          "description": "Au cout de revient. NULL si le cout du produit est inconnu : valoriser a zero sous-estimerait le stock sans que cela se voie."
+        }
+      ]
+    },
+    {
+      "cle": "reglements",
+      "libelle": "Moyens de paiement",
+      "grain": "moyen de paiement (cumul sans date)",
+      "source": "reporting.v_moyens_paiement",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "La source POS n'exporte AUCUNE date : desactiver le filtre de periode sur cette page.",
+      "dimensions": [
+        {
+          "cle": "libelle",
+          "colonne": "moyen_paiement",
+          "libelle": "Moyen de paiement",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "nombre",
+          "colonne": "nombre",
+          "libelle": "Nombre d'operations",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "montant",
+          "colonne": "montant",
+          "libelle": "Montant",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "panier_horaire",
+      "libelle": "Panier moyen par tranche horaire",
+      "grain": "tranche horaire (cumul sans date)",
+      "source": "reporting.v_panier_horaire",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "",
+      "dimensions": [
+        {
+          "cle": "heure",
+          "colonne": "tranche_horaire",
+          "libelle": "Tranche horaire",
+          "format": "texte"
+        },
+        {
+          "cle": "heure_debut",
+          "colonne": "heure_debut",
+          "libelle": "Heure de debut",
+          "format": "entier"
+        },
+        {
+          "cle": "ordre_nuit",
+          "colonne": "ordre_nuit",
+          "libelle": "Ordre dans la nuit",
+          "format": "entier"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "ca",
+          "colonne": "ca",
+          "libelle": "CA",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "ventes",
+          "colonne": "nb_ventes",
+          "libelle": "Nombre de ventes",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "vendeurs",
+          "colonne": "nb_vendeurs",
+          "libelle": "Nombre de vendeurs",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "panier_moyen",
+          "colonne": "panier_moyen",
+          "libelle": "Panier moyen",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "caissiers",
+      "libelle": "Performance par caissier",
+      "grain": "caissier (cumul sans date)",
+      "source": "reporting.v_caisse",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "Export partiel : 61 % du CA, 2 caissiers absents. Sert a comparer les caissiers entre eux, pas a mesurer l'activite. nb_tickets et nb_paniers sont le meme indicateur dans le POS.",
+      "dimensions": [
+        {
+          "cle": "utilisateur",
+          "colonne": "caissier",
+          "libelle": "Caissier",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "produits",
+          "colonne": "nb_produits",
+          "libelle": "Produits",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "tickets",
+          "colonne": "nb_tickets",
+          "libelle": "Tickets",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "paniers",
+          "colonne": "nb_paniers",
+          "libelle": "Paniers",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "panier_moyen",
+          "colonne": "panier_moyen",
+          "libelle": "Panier moyen",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "net",
+          "colonne": "total_net",
+          "libelle": "CA net",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "reglement",
+          "colonne": "total_reglement",
+          "libelle": "Total regle",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "totaux_pos",
+      "libelle": "Totaux de controle du POS",
+      "grain": "periode complete (une ligne)",
+      "source": "analytics.totaux_pos",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "SEULE source du ticket moyen : le journal de vente n'a aucun identifiant de ticket. Ecart structurel connu avec la balance par categorie : perimetres d'articles differents.",
+      "dimensions": [],
+      "mesures": [
+        {
+          "cle": "nb_panier",
+          "colonne": "nb_panier",
+          "libelle": "Nombre de paniers",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "panier_moyen",
+          "colonne": "panier_moyen",
+          "libelle": "Panier moyen",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "nombre_vendu",
+          "colonne": "nombre_vendu",
+          "libelle": "Articles vendus",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "remise_pos",
+          "colonne": "remise_pos",
+          "libelle": "Remise selon le CA global",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "total_offert",
+          "colonne": "total_offert",
+          "libelle": "Articles offerts",
+          "format": "entier",
+          "description": ""
+        },
+        {
+          "cle": "ca_ht_hors_offert",
+          "colonne": "ca_ht_hors_offert",
+          "libelle": "CA hors offert",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "ca_offert",
+          "colonne": "ca_offert",
+          "libelle": "CA offert",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    },
+    {
+      "cle": "reconciliation",
+      "libelle": "Controles de reconciliation",
+      "grain": "controle (dernier passage)",
+      "source": "analytics.journal_reconciliation",
+      "filtrable_par_date": false,
+      "colonne_date": null,
+      "avertissement": "",
+      "dimensions": [
+        {
+          "cle": "controle",
+          "colonne": "controle",
+          "libelle": "Controle",
+          "format": "texte"
+        },
+        {
+          "cle": "statut",
+          "colonne": "statut",
+          "libelle": "Statut",
+          "format": "texte"
+        },
+        {
+          "cle": "explication",
+          "colonne": "commentaire",
+          "libelle": "Lecture",
+          "format": "texte"
+        }
+      ],
+      "mesures": [
+        {
+          "cle": "attendu",
+          "colonne": "valeur_attendue",
+          "libelle": "Attendu",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "obtenu",
+          "colonne": "valeur_obtenue",
+          "libelle": "Obtenu",
+          "format": "fcfa",
+          "description": ""
+        },
+        {
+          "cle": "ecart",
+          "colonne": "ecart",
+          "libelle": "Ecart",
+          "format": "fcfa",
+          "description": ""
+        }
+      ]
+    }
+  ],
+  "ratios": [
+    {
+      "cle": "taux_remise",
+      "libelle": "Taux de remise",
+      "numerateur": "rm",
+      "denominateur": "cb",
+      "jeu": "resultat_jour",
+      "format": "pourcent",
+      "commentaire": "Remises sur CA brut."
+    },
+    {
+      "cle": "taux_marge_brute",
+      "libelle": "Taux de marge brute",
+      "numerateur": "mb",
+      "denominateur": "cn",
+      "jeu": "resultat_jour",
+      "format": "pourcent",
+      "commentaire": ""
+    },
+    {
+      "cle": "taux_cout_matiere",
+      "libelle": "Coût matière",
+      "numerateur": "ae",
+      "denominateur": "cn",
+      "jeu": "resultat_jour",
+      "format": "pourcent",
+      "commentaire": "Norme en restauration : 25 a 35 %. Reference pour EAT uniquement -- les boissons et la chicha supportent structurellement un cout plus faible."
+    },
+    {
+      "cle": "taux_rentabilite",
+      "libelle": "Taux de rentabilite d'exploitation",
+      "numerateur": "re",
+      "denominateur": "cn",
+      "jeu": "resultat_jour",
+      "format": "pourcent",
+      "commentaire": ""
+    },
+    {
+      "cle": "taux_resultat_net",
+      "libelle": "Taux de resultat net",
+      "numerateur": "rn",
+      "denominateur": "cn",
+      "jeu": "resultat_jour",
+      "format": "pourcent",
+      "commentaire": "Avant charges de personnel."
+    },
+    {
+      "cle": "prix_moyen_net",
+      "libelle": "Prix moyen net",
+      "numerateur": "cn",
+      "denominateur": "qv",
+      "jeu": "resultat_jour",
+      "format": "fcfa",
+      "commentaire": ""
+    },
+    {
+      "cle": "taux_offre_gratuite",
+      "libelle": "Taux d'offre gratuite",
+      "numerateur": "qo",
+      "denominateur": "qv",
+      "jeu": "resultat_jour",
+      "format": "pourcent",
+      "commentaire": "Quantite offerte rapportee a la quantite vendue."
+    },
+    {
+      "cle": "contribution_ca",
+      "libelle": "Contribution au CA",
+      "numerateur": "cn",
+      "denominateur": "cn",
+      "jeu": "articles",
+      "format": "pourcent",
+      "commentaire": "Part d'un article dans le CA total : le denominateur est la somme non filtree."
+    },
+    {
+      "cle": "prix_moyen_article",
+      "libelle": "Prix moyen par article",
+      "numerateur": "cn",
+      "denominateur": "q",
+      "jeu": "articles",
+      "format": "fcfa",
+      "commentaire": ""
+    },
+    {
+      "cle": "marge_theorique_pct",
+      "libelle": "Marge theorique",
+      "numerateur": "mt",
+      "denominateur": "cn",
+      "jeu": "couts_articles",
+      "format": "pourcent",
+      "commentaire": "A confronter au taux_marge_brute REEL de la meme activite. L'ecart est le constat central du dossier."
+    }
+  ],
+  "invariants": [
+    {
+      "cle": "coherence_brut_remise_net",
+      "libelle": "CA brut - remises = CA net",
+      "jeu": "resultat_jour",
+      "expression": "abs((cb - rm) - cn) < 1",
+      "pourquoi": "Coherence interne de la source de verite. Tout ecart invaliderait la remise."
+    },
+    {
+      "cle": "achats_non_perdus",
+      "libelle": "Aucun achat perdu dans la jointure",
+      "jeu": "resultat_jour",
+      "expression": "abs(ae - total_achats_source) < 1",
+      "pourquoi": "Detecte la regression du FULL OUTER JOIN vers un LEFT JOIN depuis les seules ventes. Ce defaut a reellement existe dans reporting.v_resultat_jour : des achats perdus sur 7 jours de fermeture avec reapprovisionnement, soit environ 0,12 % de la marge brute."
+    },
+    {
+      "cle": "marge_coherente",
+      "libelle": "Marge brute = CA net - achats externes",
+      "jeu": "resultat_jour",
+      "expression": "abs(mb - (cn - ae)) < 1",
+      "pourquoi": "Verifie que la vue n'a pas derive par rapport a sa propre definition."
+    },
+    {
+      "cle": "periode_non_vide",
+      "libelle": "La periode contient des ventes",
+      "jeu": "resultat_jour",
+      "expression": "cn > 0 and nb_lignes > 0",
+      "pourquoi": "Un instantane vide publie ecraserait un instantane valide."
+    },
+    {
+      "cle": "pas_de_nan",
+      "libelle": "Aucune valeur non finie dans l'instantane",
+      "jeu": "*",
+      "expression": "aucun NaN ni Infinity",
+      "pourquoi": "json.dump ecrit NaN comme un token litteral : valide en Python, INVALIDE en JSON strict. JSON.parse le rejette et interrompt tout le script du navigateur. Deja survenu deux fois sur ce projet."
+    }
+  ]
+}

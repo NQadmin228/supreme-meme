@@ -1,0 +1,31 @@
+# =====================================================================
+# Ce qui ne doit PAS monter chez Vercel
+# ---------------------------------------------------------------------
+# .gitignore ne joue aucun role ici : la preuve, index.html y figure et
+# doit pourtant etre deploye. Sans ce fichier-ci, .env.local monterait
+# avec le reste et serait servi a l'adresse /.env.local -- c'est-a-dire
+# la chaine de connexion Postgres, en clair, sur le site.
+#
+# Le middleware protege ce chemin comme les autres, donc il faudrait une
+# session valide pour le lire. Ce serait quand meme la mauvaise reponse :
+# un secret ne doit pas etre a un mot de passe de distance, il ne doit
+# pas etre la.
+#
+# La configuration vit dans les variables d'environnement Vercel, jamais
+# dans un fichier deploye.
+# =====================================================================
+
+.env
+.env.*
+
+# Outils de developpement. Le schema, l'installateur et le banc d'essai
+# s'executent depuis un poste, avec la connexion directe ; le site n'en
+# a aucun usage. base/essai.mjs cree et supprime des comptes : ce n'est
+# pas un fichier a laisser a portee d'une URL.
+base/
+
+# Le dossier lib/ RESTE : middleware.js et api/ l'importent.
+
+node_modules/
+.vercel/
+*.md

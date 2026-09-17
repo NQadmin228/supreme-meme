@@ -1,0 +1,507 @@
+<!-- ==================================================================
+     PAGE 1 — SYNTHESE
+     ================================================================== -->
+<section class="page" id="page-synthese">
+  <div class="grid g4" id="sy-kpi"></div>
+
+  <div id="sy-alertes"></div>
+
+  <div class="grid g21">
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h3>Du chiffre d'affaires brut au résultat net</h3>
+          <div class="sub">Chaque barre part du niveau atteint par la précédente : on lit ce que
+            chaque poste retire réellement au résultat.</div>
+        </div>
+        <button class="mini" data-toggle="sy-casc-t">Voir les chiffres</button>
+      </div>
+      <div class="chart-wrap l"><canvas id="c-sy-casc"></canvas></div>
+      <div class="alt-table" id="sy-casc-t"></div>
+    </div>
+    <div class="card">
+      <h3>Taux de marge par activité</h3>
+      <div class="sub">Marge brute rapportée au CA net. La bande grise situe la marge
+        de 65 à 75 % qui correspond à la norme de coût matière en restauration : c'est la
+        référence pour EAT, pas pour les boissons ni la chicha.</div>
+      <div class="chart-wrap l"><canvas id="c-sy-marge"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-head">
+        <div><h3>Chiffre d'affaires net par mois</h3>
+        <div class="sub">Trois activités, échelle unique en francs CFA.</div></div>
+        <button class="mini" data-toggle="sy-evol-t">Voir les chiffres</button>
+      </div>
+      <div class="chart-wrap"><canvas id="c-sy-evol"></canvas></div>
+      <div class="alt-table" id="sy-evol-t"></div>
+    </div>
+    <div class="card">
+      <h3>Taux de marge brute par mois</h3>
+      <div class="sub">Graphique séparé de celui du CA : superposer un montant et un
+        pourcentage sur deux échelles rend les deux courbes illisibles.</div>
+      <div class="chart-wrap"><canvas id="c-sy-taux"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g3">
+    <div class="card"><h3>Poids des activités dans le CA net</h3>
+      <div class="sub">Part de chaque activité sur la période.</div>
+      <div class="chart-wrap s"><canvas id="c-sy-part"></canvas></div>
+    </div>
+    <div class="card"><h3>Contribution à la marge brute</h3>
+      <div class="sub">Ce que chaque activité rapporte réellement, en francs.</div>
+      <div class="chart-wrap s"><canvas id="c-sy-contrib"></canvas></div>
+    </div>
+    <div class="card"><h3>Répartition des encaissements</h3>
+      <div class="sub">Cumul sur toute la période — la source POS n'a pas de date.</div>
+      <div class="chart-wrap s"><canvas id="c-sy-regl"></canvas></div>
+    </div>
+  </div>
+
+  <div class="note info">
+    <div class="note-title">Comment lire ce tableau de bord</div>
+    <strong>Journée d'exploitation de 14h00 à 13h59 le lendemain.</strong>
+    <span id="sy-part-nuit"></span> du chiffre d'affaires se réalise entre 22h et 6h : découper
+    aux minuits calendaires couperait chaque soirée en deux et fausserait tous les totaux journaliers.
+    Aucun taux n'est pré-calculé dans les données : tous les pourcentages sont recalculés
+    comme somme ÷ somme sur la période choisie, donc justes à n'importe quelle granularité.
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 2 — COMPTE DE RESULTAT
+     ================================================================== -->
+<section class="page" id="page-resultat">
+  <div class="grid g4" id="re-kpi"></div>
+
+  <div class="grid g21">
+    <div class="card">
+      <h3>Cascade du résultat sur la période</h3>
+      <div class="sub">Pourcentages exprimés en part du CA net.</div>
+      <div class="casc" id="re-casc"></div>
+      <div class="foot" id="re-casc-foot"></div>
+    </div>
+    <div class="card">
+      <h3>Structure du CA net</h3>
+      <div class="sub">Où part chaque franc encaissé.</div>
+      <div class="chart-wrap l"><canvas id="c-re-struct"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Composition du CA net par mois</h3>
+      <div class="sub">Achats externes, charges d'exploitation, investissements et résultat net.
+        Les segments s'empilent jusqu'au CA net du mois.</div></div>
+      <button class="mini" data-toggle="re-mens-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap xl"><canvas id="c-re-mens"></canvas></div>
+    <div class="alt-table" id="re-mens-t"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Résultat net par mois</h3>
+      <div class="sub">Toutes activités confondues.</div>
+      <div class="chart-wrap"><canvas id="c-re-rn"></canvas></div>
+    </div>
+    <div class="card"><h3>Compte de résultat par activité</h3>
+      <div class="sub">Après ventilation des charges au prorata du CA net du jour.</div>
+      <div class="tbl" id="re-act"></div>
+      <div class="foot">Les charges d'exploitation et les investissements ne sont pas
+        rattachables à une activité : ils sont ventilés chaque jour au prorata du CA net
+        du jour, ce qui rend le montant ventilé additif et donc filtrable par période.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 3 — VENTES & LOCOMOTIVES
+     ================================================================== -->
+<section class="page" id="page-ventes">
+  <div class="grid g4" id="ve-kpi"></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>Concentration du chiffre d'affaires</h3>
+      <div class="sub">Part cumulée du CA en fonction du nombre d'articles, classés du
+        plus gros contributeur au plus petit.</div>
+      <div class="chart-wrap l"><canvas id="c-ve-pareto"></canvas></div>
+      <div class="foot" id="ve-pareto-foot"></div>
+    </div>
+    <div class="card">
+      <h3>Les 15 premiers articles</h3>
+      <div class="sub">CA net cumulé sur la période choisie n'est pas disponible au grain
+        article : ce classement porte sur l'intégralité de la période.</div>
+      <div class="chart-wrap l"><canvas id="c-ve-top"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>CA net par catégorie</h3>
+      <div class="sub">Les 14 premières catégories sur la période choisie.</div>
+      <div class="chart-wrap l"><canvas id="c-ve-cat"></canvas></div>
+    </div>
+    <div class="card"><h3>CA net par jour de la semaine</h3>
+      <div class="sub">Cumul sur la période, journée d'exploitation.</div>
+      <div class="chart-wrap l"><canvas id="c-ve-sem"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Catalogue complet des articles</h3>
+    <div class="sub">Les <span id="ve-nb-art"></span> articles vendus sur l'intégralité de la
+      période. Cliquer sur un en-tête pour trier.</div>
+    <div class="scroll-y tall" id="ve-table"></div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 4 — PROFIL DE LA NUIT
+     ================================================================== -->
+<section class="page" id="page-horaires">
+  <div class="grid g4" id="ho-kpi"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Chiffre d'affaires par tranche horaire</h3>
+      <div class="sub">Axe ordonné selon la journée d'exploitation : 14h à gauche,
+        13h à droite. Minuit — le pic — se lit au centre, la soirée d'un seul tenant.</div></div>
+      <button class="mini" data-toggle="ho-h-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-ho-heure"></canvas></div>
+    <div class="alt-table" id="ho-h-t"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Panier moyen par tranche horaire</h3>
+      <div class="sub">Profil de référence du POS, cumul sur toute la période.</div>
+      <div class="chart-wrap"><canvas id="c-ho-panier"></canvas></div>
+      <div class="foot">Source dédiée sans date : ce profil ne réagit pas au filtre de période.</div>
+    </div>
+    <div class="card"><h3>Nombre de ventes par tranche horaire</h3>
+      <div class="sub">Volume d'opérations, à confronter au panier moyen ci-contre.</div>
+      <div class="chart-wrap"><canvas id="c-ho-ventes"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Intensité par jour de la semaine et par heure</h3>
+    <div class="sub">Une seule teinte, du plus sombre (activité faible) au plus clair
+      (activité forte). Le chiffre est inscrit dans chaque case : la couleur ne porte
+      jamais l'information seule.</div>
+    <div id="ho-heat"></div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 5 — REGLEMENTS & CREANCES
+     ================================================================== -->
+<section class="page" id="page-reglements">
+  <div class="note warn">
+    <div class="note-title">Cumul non filtrable par période</div>
+    Le rapport POS des règlements n'exporte <strong>aucune date</strong>. Les chiffres de cette
+    page portent sur l'intégralité de la période, du <span id="rg-periode"></span>, quel que
+    soit le filtre choisi en haut de page.
+  </div>
+
+  <div class="grid g4" id="rg-kpi"></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>Montants encaissés par moyen de paiement</h3>
+      <div class="sub">Le crédit n'est pas un encaissement : il figure ici pour boucler
+        avec le CA net.</div>
+      <div class="chart-wrap l"><canvas id="c-rg-moyens"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Nombre d'opérations par moyen de paiement</h3>
+      <div class="sub">À confronter aux montants : un moyen peu utilisé peut porter
+        de gros tickets, et inversement.</div>
+      <div class="chart-wrap l"><canvas id="c-rg-nb"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Détail des règlements</h3>
+      <div class="tbl" id="rg-table"></div>
+    </div>
+    <div class="card"><h3>Ce que révèle la structure des encaissements</h3>
+      <div id="rg-lecture"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 6 — MARGE PAR ACTIVITE
+     ================================================================== -->
+<section class="page" id="page-marge">
+  <div id="marge-alerte"></div>
+
+  <div class="grid g3" id="ma-kpi"></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-head">
+        <div><h3>CA net, achats et marge par activité</h3>
+        <div class="sub">Les achats sont rattachés directement à leur activité :
+          aucune clé de répartition n'intervient ici.</div></div>
+        <button class="mini" data-toggle="ma-comp-t">Voir les chiffres</button>
+      </div>
+      <div class="chart-wrap l"><canvas id="c-ma-comp"></canvas></div>
+      <div class="alt-table" id="ma-comp-t"></div>
+    </div>
+    <div class="card">
+      <h3>Coût matière par activité</h3>
+      <div class="sub">Achats externes rapportés au CA net. La bande situe la norme de
+        la restauration, de 25 à 35 % : elle vaut pour EAT. Les boissons et la chicha
+        supportent structurellement un coût matière plus faible.</div>
+      <div class="chart-wrap l"><canvas id="c-ma-cout"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Taux de marge brute par mois et par activité</h3>
+    <div class="sub">Une seule échelle en pourcentage pour les trois activités.
+      Les mois sans achat enregistré sur une activité affichent 100 % : c'est un artefact
+      de saisie des dépenses, pas une performance.</div>
+    <div class="chart-wrap l"><canvas id="c-ma-mens"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Détail par activité sur la période</h3>
+    <div class="tbl" id="ma-table"></div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 7 — COUT DE REVIENT
+     ================================================================== -->
+<section class="page" id="page-cout-revient">
+  <div class="note warn">
+    <div class="note-title">Périmètre de cette page</div>
+    Le fichier des coûts de revient référence <strong><span id="cr-nb-ref"></span> produits</strong>,
+    dont <strong><span id="cr-nb-app"></span> ont effectivement été vendus</strong>, soit
+    <strong><span id="cr-couv"></span> du chiffre d'affaires</strong>. Tout ce qui suit ne porte
+    que sur ce périmètre, et sur l'intégralité de la période — le filtre de dates ne s'y applique pas.
+  </div>
+
+  <div class="grid g4" id="cr-kpi"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Marge théorique contre marge réelle, par activité</h3>
+      <div class="sub">La marge théorique découle des coûts de recette. La marge réelle
+        découle des achats effectivement payés. L'écart entre les deux est la question
+        centrale de cette page.</div></div>
+      <button class="mini" data-toggle="cr-cmp-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap"><canvas id="c-cr-compare"></canvas></div>
+    <div class="alt-table" id="cr-cmp-t"></div>
+  </div>
+
+  <div id="cr-diagnostic"></div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Les 15 meilleures marges théoriques</h3>
+      <div class="sub">Produits à pousser : marge unitaire la plus élevée.</div>
+      <div class="chart-wrap l"><canvas id="c-cr-best"></canvas></div>
+    </div>
+    <div class="card"><h3>Les 15 marges théoriques les plus faibles</h3>
+      <div class="sub">Produits dont le prix de vente mérite un réexamen.</div>
+      <div class="chart-wrap l"><canvas id="c-cr-worst"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Coût de revient par produit</h3>
+    <div class="sub">Coût de recette, prix de vente pratiqué, marge théorique et volume vendu.</div>
+    <div class="scroll-y tall" id="cr-table"></div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 8 — DEPENSES
+     ================================================================== -->
+<section class="page" id="page-depenses">
+  <div class="grid g4" id="de-kpi"></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-head">
+        <div><h3>Postes de dépense sur la période</h3>
+        <div class="sub">Tous postes confondus, du plus lourd au plus léger.</div></div>
+        <button class="mini" data-toggle="de-p-t">Voir les chiffres</button>
+      </div>
+      <div class="chart-wrap xl"><canvas id="c-de-postes"></canvas></div>
+      <div class="alt-table" id="de-p-t"></div>
+    </div>
+    <div class="card">
+      <h3>Répartition par nature</h3>
+      <div class="sub">Achats externes, charges d'exploitation, investissements.</div>
+      <div class="chart-wrap s"><canvas id="c-de-nature"></canvas></div>
+      <h3 style="margin-top:18px;">Charges d'exploitation par poste</h3>
+      <div class="sub">Hors achats de marchandises et hors investissements.</div>
+      <div class="chart-wrap s"><canvas id="c-de-opex"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Dépenses par mois et par nature</h3>
+    <div class="sub">Segments empilés : le total du mois se lit en haut de la barre.</div>
+    <div class="chart-wrap l"><canvas id="c-de-mens"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h3>Détail des postes</h3>
+    <div class="scroll-y" id="de-table"></div>
+    <div class="foot">Le poste <code>CAISSE</code> est volontairement exclu de la chaîne :
+      c'est un fonds de caisse, pas une dépense. Le poste <code>MONNAIE</code> est inclus
+      en charges d'exploitation à la demande de l'établissement ; c'est aussi un fonds de
+      caisse, mais son impact sur le résultat est de l'ordre de 0,1 %.</div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 9 — REMISES & OFFERTS
+     ================================================================== -->
+<section class="page" id="page-commercial">
+  <div id="co-alerte"></div>
+
+  <div class="grid g4" id="co-kpi"></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-head">
+        <div><h3>Effort commercial par mois</h3>
+        <div class="sub">Remises accordées et valeur des articles offerts, mois par mois.</div></div>
+        <button class="mini" data-toggle="co-m-t">Voir les chiffres</button>
+      </div>
+      <div class="chart-wrap l"><canvas id="c-co-mens"></canvas></div>
+      <div class="alt-table" id="co-m-t"></div>
+    </div>
+    <div class="card">
+      <h3>Taux de remise par mois</h3>
+      <div class="sub">Remises rapportées au CA brut du mois.</div>
+      <div class="chart-wrap l"><canvas id="c-co-taux"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Remises par activité</h3>
+      <div class="sub">Montant remisé et taux appliqué.</div>
+      <div class="tbl" id="co-act"></div>
+    </div>
+    <div class="card"><h3>Articles offerts par caissier</h3>
+      <div class="sub">Valeur de vente des articles offerts, sur la période choisie.</div>
+      <div class="chart-wrap"><canvas id="c-co-caissier"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Catégories les plus offertes</h3>
+      <div class="chart-wrap l"><canvas id="c-co-cat"></canvas></div>
+    </div>
+    <div class="card"><h3>Articles les plus offerts</h3>
+      <div class="sub">Cumul sur toute la période.</div>
+      <div class="scroll-y" id="co-art"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 10 — STOCK & INVENTAIRE
+     ================================================================== -->
+<section class="page" id="page-stock">
+  <div id="st-alerte"></div>
+
+  <div class="grid g4" id="st-kpi"></div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Stock théorique valorisé par catégorie</h3>
+      <div class="sub">Valorisé au coût de revient, là où celui-ci est connu.</div>
+      <div class="chart-wrap l"><canvas id="c-st-cat"></canvas></div>
+    </div>
+    <div class="card"><h3>Articles sous seuil d'alerte</h3>
+      <div class="sub">Stock théorique inférieur ou égal au seuil paramétré dans le POS.</div>
+      <div id="st-alertes-liste"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Inventaire complet</h3>
+    <div class="sub">Stock théorique, seuil d'alerte et valorisation par article.</div>
+    <div class="scroll-y tall" id="st-table"></div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 11 — PERFORMANCE CAISSE
+     ================================================================== -->
+<section class="page" id="page-caisse">
+  <div class="note warn">
+    <div class="note-title">Export POS partiel et sans date</div>
+    Le rapport par utilisateur ne couvre qu'une fraction de l'activité et n'exporte
+    aucune date : il ne réagit pas au filtre de période et ne se rapproche pas du CA
+    total. Il sert à comparer les caissiers <strong>entre eux</strong>, pas à mesurer
+    l'activité de l'établissement.
+    <span id="ca-couverture"></span>
+  </div>
+
+  <div class="grid g4" id="ca-kpi"></div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Chiffre d'affaires par caissier</h3>
+      <div class="chart-wrap l"><canvas id="c-ca-ca"></canvas></div>
+    </div>
+    <div class="card"><h3>Panier moyen par caissier</h3>
+      <div class="sub">Le POS ne compte pas les clients : nombre de tickets et nombre de
+        paniers y sont le même indicateur, donc ticket moyen et panier moyen aussi.</div>
+      <div class="chart-wrap l"><canvas id="c-ca-panier"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Détail par caissier</h3>
+    <div class="tbl" id="ca-table"></div>
+  </div>
+</section>
+
+<!-- ==================================================================
+     PAGE 12 — QUALITE DES DONNEES
+     ================================================================== -->
+<section class="page" id="page-qualite">
+  <div class="note info">
+    <div class="note-title">Pourquoi cette page existe</div>
+    Un tableau de bord qui ne montre que ses points forts se fait démonter à la première
+    question précise. Cette page liste ce que les données <strong>ne permettent pas</strong>
+    d'affirmer, et les écarts entre rapports POS qui sont connus, expliqués et stables.
+    Un écart connu et stable n'est pas une erreur ; sa <em>variation</em>, elle, serait un signal.
+  </div>
+
+  <div class="grid g4" id="qa-kpi"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Contrôles de réconciliation</h3>
+    <div class="sub">Exécutés à chaque extraction. Les contrôles bloquants arrêtent la
+      chaîne : mieux vaut pas de tableau de bord qu'un tableau de bord faux.</div>
+    <div class="tbl" id="qa-recon"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Limites connues du jeu de données</h3>
+      <div id="qa-limites"></div>
+    </div>
+    <div class="card"><h3>Règles métier appliquées</h3>
+      <div id="qa-regles"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Sources et volumétrie</h3>
+    <div class="sub">Ce qui alimente ce tableau de bord.</div>
+    <div class="tbl" id="qa-sources"></div>
+  </div>
+</section>

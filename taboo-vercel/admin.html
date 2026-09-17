@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>TABOO — Administration</title>
+
+<!-- =====================================================================
+     TABOO — Vue d'administration
+     ---------------------------------------------------------------------
+     POURQUOI UNE PAGE SEPAREE ET PAS UN ONGLET DU TABLEAU DE BORD
+     -------------------------------------------------------------
+     index.html fait 5,3 Mo : c'est le fichier assemble par la chaine
+     d'extraction, donnees comprises. Y greffer l'administration
+     obligerait a regenerer ces 5,3 Mo pour corriger un bouton, et
+     melangerait deux cycles de vie qui n'ont rien a voir -- les
+     donnees changent chaque nuit, l'administration presque jamais.
+
+     Cette page-ci est un actif statique de quelques kilooctets. Le
+     middleware la refuse aux lecteurs avant de l'envoyer, et
+     api/admin.js refuse l'action de son cote. Voir middleware.js pour
+     la raison d'etre des deux controles.
+
+     CE QUE CETTE PAGE NE FAIT PAS
+     -----------------------------
+     Elle ne decide rien. Chaque bouton est un appel a /api/admin, et
+     c'est le serveur qui autorise ou refuse. Cacher un bouton n'a
+     jamais protege quoi que ce soit : ici, le masquer n'est qu'une
+     politesse envers l'utilisateur, la regle est ailleurs.
+
+     ELLE NE CONTIENT PLUS « MON MOT DE PASSE »
+     ------------------------------------------
+     Ce formulaire vit maintenant dans compte.html, ouvert a toute
+     session valide. Il etait ici, donc hors de portee des lecteurs : les
+     seules personnes a recevoir un mot de passe tire au sort etaient
+     aussi les seules a ne pas pouvoir le changer.
+
+     Deplace, et non duplique. Deux formulaires pour un meme geste, ce
+     sont deux endroits ou corriger le prochain defaut, et un seul des
+     deux auquel on pense. L'administrateur passe par /compte comme tout
+     le monde ; le lien est dans l'en-tete.
+     ===================================================================== -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme:dark;
+    --fond:#001A20; --carte:#00232B; --bordure:#0E4351; --bordure-vive:#2C8598;
+    --accent:#004F5E; --accent-clair:#7FD9E8;
+    --texte:#EAF6F8; --doux:#9EC4CC; --faible:#6E939B;
+    --rouge:#d03b3b; --rouge-doux:#f0a0a0; --vert:#3ea87a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--texte);
+    font:14px/1.6 'Inter',system-ui,-apple-system,sans-serif}
+
+  /* Une seule gouttiere laterale, posee sur le conteneur, en
+     padding-inline : un raccourci `padding` remettrait les cotes a zero
+     et la page collerait au bord sur telephone. */
+  .enveloppe{max-width:1080px;margin:0 auto;padding-inline:16px;
+    padding-block:0 48px}
+
+  /* ---------- Entete ---------- */
+  header{border-bottom:1px solid var(--bordure);margin-bottom:22px;
+    padding-block:18px;display:flex;flex-wrap:wrap;gap:12px;
+    align-items:center;justify-content:space-between}
+  .marque{display:flex;align-items:center;gap:12px;min-width:0}
+  .marque .pastille{width:38px;height:38px;border-radius:4px;flex:0 0 auto;
+    background:var(--accent);display:flex;align-items:center;
+    justify-content:center;font-size:9px;font-weight:600;letter-spacing:1px}
+  .marque h1{font-size:14px;font-weight:600;letter-spacing:1.3px;margin:0;
+    text-transform:uppercase}
+  .marque .sub{color:var(--faible);font-size:11.5px;margin-top:1px}
+  .actions-entete{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .qui{color:var(--doux);font-size:12.5px}
+  .qui b{color:var(--texte);font-weight:600}
+
+  /* ---------- Onglets ---------- */
+  nav.onglets{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:20px;
+    border-bottom:1px solid var(--bordure)}
+  nav.onglets button{background:none;border:none;border-bottom:2px solid transparent;
+    color:var(--doux);padding:9px 14px;font:inherit;font-size:13.5px;
+    cursor:pointer;margin-bottom:-1px}
+  nav.onglets button:hover{color:var(--texte)}
+  nav.onglets button[aria-selected="true"]{color:var(--accent-clair);
+    border-bottom-color:var(--accent-clair);font-weight:600}
+
+  /* ---------- Blocs ---------- */
+  section.panneau[hidden]{display:none}
+  .bloc{background:var(--carte);border:1px solid var(--bordure);
+    border-radius:6px;padding:18px;margin-bottom:18px}
+  .bloc h2{font-size:12px;font-weight:600;letter-spacing:1.1px;margin:0 0 14px;
+    text-transform:uppercase;color:var(--doux)}
+
+  /* ---------- Formulaires ---------- */
+  label{display:block;font-size:11.5px;color:var(--faible);margin-bottom:4px;
+    letter-spacing:.3px}
+  input,select{background:#002A33;border:1px solid var(--bordure-vive);
+    color:var(--texte);padding:9px 11px;border-radius:4px;font:inherit;
+    font-size:14px;width:100%}
+  input:focus,select:focus{outline:none;border-color:var(--accent-clair)}
+  .rangee{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .rangee > div{flex:1 1 170px;min-width:0}
+  button.bouton{background:var(--accent);border:1px solid var(--bordure-vive);
+    color:var(--texte);padding:9px 15px;border-radius:4px;font:inherit;
+    font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  button.bouton:hover:not(:disabled){background:#0a6072}
+  button.bouton:disabled{opacity:.45;cursor:default}
+  button.mineur{background:transparent;border-color:var(--bordure);
+    color:var(--doux);font-weight:400;padding:6px 10px;font-size:12.5px}
+  button.mineur:hover:not(:disabled){background:#00303a;color:var(--texte)}
+  button.danger{border-color:#5d2626;color:var(--rouge-doux)}
+  button.danger:hover:not(:disabled){background:#3a1a1a}
+
+  /* ---------- Tableaux ---------- */
+  /* Seul le tableau deborde, dans son propre conteneur : le corps de la
+     page ne doit jamais defiler horizontalement. */
+  .defilant{overflow-x:auto;margin:0 -18px;padding-inline:18px}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:600px}
+  th{text-align:left;font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.9px;color:var(--faible);font-weight:600;
+    padding:0 10px 8px;border-bottom:1px solid var(--bordure);
+    white-space:nowrap}
+  td{padding:10px;border-bottom:1px solid rgba(14,67,81,.5);
+    vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  td.cellule-actions{white-space:nowrap;text-align:right}
+  td.cellule-actions button{margin-left:5px}
+  .ident{font-weight:600}
+  .inactif{opacity:.5}
+
+  .etiquette{display:inline-block;padding:2px 7px;border-radius:3px;
+    font-size:10.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+  .et-admin{background:rgba(127,217,232,.15);color:var(--accent-clair)}
+  .et-lecteur{background:rgba(158,196,204,.1);color:var(--doux)}
+  .et-off{background:rgba(208,59,59,.14);color:var(--rouge-doux)}
+
+  /* ---------- Messages ---------- */
+  .avis{padding:11px 13px;border-radius:4px;font-size:13px;margin-bottom:14px}
+  .avis-err{background:rgba(208,59,59,.14);border:1px solid var(--rouge);
+    color:var(--rouge-doux)}
+  .avis-ok{background:rgba(62,168,122,.13);border:1px solid var(--vert);
+    color:#a5dcc3}
+  .avis[hidden]{display:none}
+
+  /* Le mot de passe fraichement tire. Volontairement encombrant : il ne
+     sera plus jamais affiche, l'utilisateur doit le voir. */
+  .secret{background:rgba(127,217,232,.08);border:1px solid var(--bordure-vive);
+    border-radius:5px;padding:15px;margin-bottom:16px}
+  .secret .titre{font-size:11px;text-transform:uppercase;letter-spacing:1px;
+    color:var(--doux);margin-bottom:9px}
+  .secret .valeur{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:17px;font-weight:600;color:var(--accent-clair);
+    word-break:break-all;margin-bottom:10px;user-select:all}
+  .secret .note{font-size:11.5px;color:var(--faible);line-height:1.55}
+
+  /* Les cases d'etablissement. Empilees plutot qu'en ligne : deux
+     etablissements tiennent cote a cote, cinq deborderaient la colonne
+     et pousseraient tout le tableau en defilement horizontal. */
+  .cellule-etabs{white-space:nowrap}
+  .case{display:flex;align-items:center;gap:6px;font-size:12px;
+    color:var(--doux);cursor:pointer;line-height:1.9}
+  .case input{width:auto;margin:0;accent-color:var(--accent-clair);cursor:pointer}
+  .case input:disabled{cursor:default;opacity:.55}
+  .case:has(input:disabled){cursor:default;color:var(--faible)}
+
+  .vide{color:var(--faible);font-size:13px;padding:14px 0;text-align:center}
+  .horodatage{color:var(--faible);font-size:12px;white-space:nowrap}
+  .evenement{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11.5px}
+  .ev-echec,.ev-bloquee{color:var(--rouge-doux)}
+  .ev-ok{color:#8fd0b3}
+
+  @media (max-width:560px){
+    .actions-entete{width:100%;justify-content:space-between}
+    .bloc{padding:14px}
+    .defilant{margin:0 -14px;padding-inline:14px}
+  }
+</style>
+</head>
+<body>
+<div class="enveloppe">
+
+  <header>
+    <div class="marque">
+      <div class="pastille">TABOO</div>
+      <div>
+        <h1>Administration</h1>
+        <div class="sub">Comptes et journal d'accès</div>
+      </div>
+    </div>
+    <div class="actions-entete">
+      <span class="qui" id="qui"></span>
+      <a href="/"><button class="bouton mineur" type="button">Tableau de bord</button></a>
+      <a href="/compte"><button class="bouton mineur" type="button">Mon compte</button></a>
+      <button class="bouton mineur" type="button" id="deconnexion">Déconnexion</button>
+    </div>
+  </header>
+
+  <div class="avis avis-err" id="avis-global" hidden></div>
+
+  <nav class="onglets" role="tablist">
+    <button role="tab" aria-selected="true"  data-panneau="comptes">Comptes</button>
+    <button role="tab" aria-selected="false" data-panneau="journal">Journal</button>
+  </nav>
+
+  <!-- ---------- Comptes ---------- -->
+  <section class="panneau" id="p-comptes">
+
+    <div class="secret" id="secret" hidden>
+      <div class="titre" id="secret-titre">Mot de passe</div>
+      <div class="valeur" id="secret-valeur"></div>
+      <div class="note">
+        Ce mot de passe n'est pas conservé : la base n'en garde qu'une
+        empreinte. Il ne sera plus jamais affiché. Transmettez-le par un
+        autre canal que le lien du tableau de bord, puis fermez ce message.
+        <div style="margin-top:9px">
+          <button class="bouton mineur" type="button" id="copier">Copier</button>
+          <button class="bouton mineur" type="button" id="fermer-secret">J'ai noté</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloc">
+      <h2>Nouveau compte</h2>
+      <form id="form-creer">
+        <div class="rangee">
+          <div>
+            <label for="n-identifiant">Identifiant</label>
+            <input id="n-identifiant" name="identifiant" required
+                   autocapitalize="none" autocorrect="off" spellcheck="false"
+                   pattern="[a-z0-9._\-]{2,32}"
+                   title="Minuscules, chiffres, point, tiret ou souligné. 2 à 32 caractères."
+                   placeholder="amadou">
+          </div>
+          <div>
+            <label for="n-nom">Nom affiché</label>
+            <input id="n-nom" name="nom" required placeholder="Amadou D.">
+          </div>
+          <div style="flex:0 1 140px">
+            <label for="n-role">Rôle</label>
+            <select id="n-role" name="role">
+              <option value="lecteur">Lecteur</option>
+              <option value="admin">Administrateur</option>
+            </select>
+          </div>
+          <div style="flex:0 0 auto">
+            <button class="bouton" type="submit">Créer</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="bloc">
+      <h2>Comptes</h2>
+      <div class="defilant">
+        <table>
+          <thead><tr>
+            <th>Identifiant</th><th>Nom</th><th>Rôle</th>
+            <th>Établissements</th>
+            <th>Dernière connexion</th><th></th>
+          </tr></thead>
+          <tbody id="corps-comptes"></tbody>
+        </table>
+      </div>
+      <div class="vide" id="comptes-vides" hidden>Aucun compte.</div>
+    </div>
+  </section>
+
+  <!-- ---------- Journal ---------- -->
+  <section class="panneau" id="p-journal" hidden>
+    <div class="bloc">
+      <h2>200 derniers événements</h2>
+      <div class="defilant">
+        <table>
+          <thead><tr>
+            <th>Horodatage</th><th>Événement</th><th>Compte</th>
+            <th>Par</th><th>Détail</th><th>IP</th>
+          </tr></thead>
+          <tbody id="corps-journal"></tbody>
+        </table>
+      </div>
+      <div class="vide" id="journal-vide" hidden>Aucun événement.</div>
+    </div>
+  </section>
+
+
+</div>
+
+<script type="module">
+/* =====================================================================
+   Aucune decision n'est prise ici. Chaque geste est un appel a /api/,
+   et c'est le serveur qui autorise. Ce script affiche et transmet.
+   ===================================================================== */
+
+const $ = (id) => document.getElementById(id);
+
+/* ---------- Injection ---------- */
+/* Les noms et identifiants viennent de la base, ou ils ont ete saisis a
+   la main. Ce fichier ne contient donc AUCUN innerHTML portant une
+   valeur de compte : tout passe par textContent ou createElement. Un
+   « <img src=x onerror=...> » place dans un nom d'utilisateur s'afficherait
+   comme du texte, ce qu'il est.
+
+   Une fonction d'echappement serait plus fragile qu'utile ici : il
+   suffirait d'oublier de l'appeler une fois. N'introduisez pas
+   d'innerHTML dans ce fichier. */
+
+/* ---------- Appels ---------- */
+
+async function appeler(chemin, options = {}) {
+  const r = await fetch(chemin, {
+    credentials: 'same-origin',
+    headers: {'content-type': 'application/json'},
+    ...options,
+  });
+
+  // 401 : la session est tombee (expiration, revocation, compte
+  // desactive). Recharger fait reapparaitre le formulaire du
+  // middleware, plutot que de laisser une page qui ne repond plus.
+  if (r.status === 401) { location.reload(); throw new Error('session'); }
+
+  let corps = {};
+  try { corps = await r.json(); } catch { /* reponse sans JSON */ }
+  if (!r.ok) throw new Error(corps.erreur || `Erreur ${r.status}.`);
+  return corps;
+}
+
+function avis(message) {
+  const el = $('avis-global');
+  el.textContent = message;
+  el.hidden = !message;
+  if (message) window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+/* ---------- Onglets ---------- */
+
+document.querySelectorAll('nav.onglets button').forEach(bouton => {
+  bouton.addEventListener('click', () => {
+    document.querySelectorAll('nav.onglets button').forEach(b =>
+      b.setAttribute('aria-selected', String(b === bouton)));
+    for (const nom of ['comptes', 'journal']) {
+      // el.hidden, pas style.display : la feuille de style du conteneur
+      // porte deja [hidden]{display:none}.
+      $('p-' + nom).hidden = (nom !== bouton.dataset.panneau);
+    }
+  });
+});
+
+/* ---------- Le mot de passe affiche une fois ---------- */
+
+function montrerSecret(identifiant, motdepasse) {
+  $('secret-titre').textContent = 'Mot de passe de « ' + identifiant + ' »';
+  $('secret-valeur').textContent = motdepasse;
+  $('secret').hidden = false;
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+$('fermer-secret').addEventListener('click', () => {
+  $('secret').hidden = true;
+  $('secret-valeur').textContent = '';
+});
+$('copier').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('secret-valeur').textContent);
+    $('copier').textContent = 'Copié';
+    setTimeout(() => { $('copier').textContent = 'Copier'; }, 1600);
+  } catch {
+    // Le presse-papiers est refuse hors contexte securise ou sans
+    // permission. La valeur est selectionnable (user-select:all), donc
+    // on le dit au lieu d'echouer en silence.
+    $('copier').textContent = 'Sélectionnez le texte';
+  }
+});
+
+/* ---------- Rendu des comptes ---------- */
+
+function dateCourte(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString('fr-FR', {day: '2-digit', month: '2-digit',
+    year: '2-digit', hour: '2-digit', minute: '2-digit'});
+}
+
+let moi = null;
+
+/* Remplie par recharger(), depuis la reponse du serveur. La page n'en
+   tient pas de copie ecrite en dur : le jour ou un etablissement
+   s'ajoute, la case apparait sans toucher a ce fichier. */
+let ETABLISSEMENTS = [];
+
+function rendreComptes(comptes) {
+  const corps = $('corps-comptes');
+  corps.replaceChildren();
+  $('comptes-vides').hidden = comptes.length > 0;
+
+  for (const c of comptes) {
+    const tr = document.createElement('tr');
+    if (!c.actif) tr.className = 'inactif';
+
+    const tdId = document.createElement('td');
+    tdId.className = 'ident';
+    tdId.textContent = c.identifiant;
+    if (c.identifiant === moi) {
+      const marque = document.createElement('span');
+      marque.className = 'horodatage';
+      marque.textContent = ' (vous)';
+      tdId.appendChild(marque);
+    }
+
+    const tdNom = document.createElement('td');
+    tdNom.textContent = c.nom;
+
+    const tdRole = document.createElement('td');
+    const et = document.createElement('span');
+    et.className = 'etiquette ' + (c.role === 'admin' ? 'et-admin' : 'et-lecteur');
+    et.textContent = c.role === 'admin' ? 'Admin' : 'Lecteur';
+    tdRole.appendChild(et);
+    if (!c.actif) {
+      const off = document.createElement('span');
+      off.className = 'etiquette et-off';
+      off.style.marginLeft = '6px';
+      off.textContent = 'Désactivé';
+      tdRole.appendChild(off);
+    }
+
+    /* Les établissements visibles.
+
+       Une case par établissement, cochée d'après la base. Un
+       administrateur les voit toutes cochées et verrouillées : le rôle
+       admin vaut accès à tout, et proposer de lui retirer Amnesia
+       donnerait un bouton qui ne fait rien — le serveur refuse cette
+       demande (409) plutôt que de l'enregistrer sans effet. */
+    const tdEtabs = document.createElement('td');
+    tdEtabs.className = 'cellule-etabs';
+
+    for (const etab of ETABLISSEMENTS) {
+      const eti = document.createElement('label');
+      eti.className = 'case';
+      const boite = document.createElement('input');
+      boite.type = 'checkbox';
+      boite.checked = c.role === 'admin' || (c.acces || []).includes(etab.code);
+      boite.disabled = c.role === 'admin' || !c.actif;
+      boite.title = c.role === 'admin'
+        ? 'Un administrateur voit tous les établissements.'
+        : (c.actif ? `Donner ou retirer l'accès à ${etab.nom}`
+                   : 'Compte désactivé.');
+
+      boite.addEventListener('change', async () => {
+        const voulus = [...tdEtabs.querySelectorAll('input')]
+          .filter(b => b.checked).map(b => b.dataset.code);
+        // On envoie la liste ENTIÈRE, pas la case qui vient de changer :
+        // le serveur remplace, il n'ajoute ni ne retire. Deux clics
+        // rapides ne peuvent donc pas se croiser et laisser un état que
+        // personne n'a demandé.
+        [...tdEtabs.querySelectorAll('input')].forEach(b => { b.disabled = true; });
+        try {
+          await agir({action: 'definir_acces', identifiant: c.identifiant,
+                      acces: voulus});
+        } catch { /* agir() a déjà affiché le message et relu l'état */ }
+      });
+
+      boite.dataset.code = etab.code;
+      eti.appendChild(boite);
+      eti.appendChild(document.createTextNode(etab.nom));
+      tdEtabs.appendChild(eti);
+    }
+
+    const tdDate = document.createElement('td');
+    tdDate.className = 'horodatage';
+    tdDate.textContent = dateCourte(c.derniere_connexion);
+
+    const tdActions = document.createElement('td');
+    tdActions.className = 'cellule-actions';
+
+    const ajouter = (libelle, titre, classe, gestionnaire) => {
+      const b = document.createElement('button');
+      b.className = 'bouton mineur' + (classe ? ' ' + classe : '');
+      b.type = 'button';
+      b.textContent = libelle;
+      b.title = titre;
+      // Le catch est ICI, une fois, et pas dans chacun des quatre
+      // gestionnaires : agir() a deja affiche le message, il ne reste
+      // qu'a ne pas laisser la promesse rejetee filer dans la console.
+      b.addEventListener('click', () => { gestionnaire(b).catch(() => {}); });
+      tdActions.appendChild(b);
+    };
+
+    ajouter('Nouveau mot de passe',
+      'Tire un mot de passe au sort et coupe les sessions du compte',
+      '', async (b) => {
+        const soi = c.identifiant === moi;
+        if (!confirm(`Attribuer un nouveau mot de passe à « ${c.identifiant} » ?\n\n`
+          + (soi ? `C'est VOTRE compte : le mot de passe affiché sera le vôtre,\n`
+                 + `et vos sessions ouvertes ailleurs seront fermées.`
+                 : `Ses sessions en cours seront coupées.`))) return;
+        b.disabled = true;
+        try {
+          await agir({action: 'reinitialiser', identifiant: c.identifiant},
+                     (r) => montrerSecret(c.identifiant, r.motdepasse));
+        } finally { b.disabled = false; }
+      });
+
+    ajouter(c.role === 'admin' ? 'Passer lecteur' : 'Passer admin',
+      'Change le rôle du compte', '', async (b) => {
+        b.disabled = true;
+        await agir({action: 'modifier', identifiant: c.identifiant,
+                    role: c.role === 'admin' ? 'lecteur' : 'admin'});
+        b.disabled = false;
+      });
+
+    ajouter(c.actif ? 'Désactiver' : 'Réactiver',
+      c.actif ? 'Ferme l\'accès sans supprimer le compte ni son historique'
+              : 'Rouvre l\'accès', c.actif ? 'danger' : '', async (b) => {
+        b.disabled = true;
+        await agir({action: 'modifier', identifiant: c.identifiant, actif: !c.actif});
+        b.disabled = false;
+      });
+
+    ajouter('Supprimer', 'Efface le compte. Le journal, lui, est conservé.',
+      'danger', async (b) => {
+        if (!confirm(`Supprimer définitivement le compte « ${c.identifiant} » ?\n\n`
+                   + `Le journal de ses connexions est conservé.`)) return;
+        b.disabled = true;
+        await agir({action: 'supprimer', identifiant: c.identifiant});
+        b.disabled = false;
+      });
+
+    tr.append(tdId, tdNom, tdRole, tdEtabs, tdDate, tdActions);
+    corps.appendChild(tr);
+  }
+}
+
+/* ---------- Rendu du journal ---------- */
+
+const CLASSE_EVENEMENT = (ev) =>
+    ev.includes('echec') || ev.includes('bloquee') || ev.includes('refuse')
+      ? 'ev-echec'
+  : ev === 'connexion_ok' ? 'ev-ok' : '';
+
+function rendreJournal(lignes) {
+  const corps = $('corps-journal');
+  corps.replaceChildren();
+  $('journal-vide').hidden = lignes.length > 0;
+
+  for (const l of lignes) {
+    const tr = document.createElement('tr');
+    const cellule = (valeur, classe) => {
+      const td = document.createElement('td');
+      if (classe) td.className = classe;
+      td.textContent = valeur ?? '—';
+      return td;
+    };
+    tr.append(
+      cellule(dateCourte(l.horodatage), 'horodatage'),
+      cellule(l.evenement, 'evenement ' + CLASSE_EVENEMENT(l.evenement)),
+      cellule(l.sujet), cellule(l.acteur),
+      cellule(l.detail), cellule(l.ip, 'horodatage'));
+    corps.appendChild(tr);
+  }
+}
+
+/* ---------- Chargement ---------- */
+
+/* Ne touche PAS au bandeau quand tout va bien.
+
+   La version precedente y faisait avis('') en fin de succes, et effacait
+   donc le refus qu'agir() venait d'afficher : le serveur repondait bien
+   « c'est le dernier administrateur actif », la relecture qui suivait
+   reussissait, et le message disparaissait avant d'avoir ete lu. Le
+   bouton semblait sans effet. C'est agir() qui ouvre et ferme le
+   bandeau ; recharger() ne l'ecrit que pour signaler son propre echec. */
+async function recharger() {
+  try {
+    const d = await appeler('/api/admin');
+    moi = d.moi;
+    ETABLISSEMENTS = d.etablissements || [];
+    $('qui').textContent = d.moi + ' · administrateur';
+    rendreComptes(d.comptes);
+    rendreJournal(d.journal);
+  } catch (e) {
+    if (e.message !== 'session') avis(e.message);
+  }
+}
+
+/* Toute action passe par ici : elle agit, puis relit l'etat depuis le
+   serveur. On ne met jamais a jour le tableau localement -- la version
+   affichee serait alors ce que le navigateur CROIT, et divergerait
+   silencieusement du refus eventuel du serveur. */
+async function agir(charge, aMontrer) {
+  avis('');
+  try {
+    const r = await appeler('/api/admin',
+      {method: 'POST', body: JSON.stringify(charge)});
+
+    /* Ce qui doit etre MONTRE l'est ici, avant la relecture.
+
+       Un mot de passe affiche une seule fois ne doit dependre d'aucune
+       etape ulterieure : quand l'affichage venait apres recharger(), le
+       moindre incident entre les deux -- et il y en a eu un -- emportait
+       la seule occasion de le lire. La base n'en garde qu'une empreinte,
+       donc perdu ici veut dire perdu tout court. */
+    if (aMontrer) aMontrer(r);
+
+    await recharger();
+    return r;
+  } catch (e) {
+    if (e.message === 'session') throw e;
+    // La relecture d'abord, le message ensuite : dans l'autre ordre, un
+    // rendu qui echouerait a son tour ecraserait le refus du serveur.
+    await recharger();
+    avis(e.message);
+    throw e;
+  }
+}
+
+/* ---------- Creation ---------- */
+
+$('form-creer').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const bouton = e.target.querySelector('button[type=submit]');
+  bouton.disabled = true;
+  try {
+    await agir({
+      action: 'creer',
+      identifiant: $('n-identifiant').value.trim().toLowerCase(),
+      nom: $('n-nom').value.trim(),
+      role: $('n-role').value,
+    }, (r) => { e.target.reset(); montrerSecret(r.identifiant, r.motdepasse); });
+  } catch { /* le message est deja affiche par agir() */ }
+  finally { bouton.disabled = false; }
+});
+
+/* ---------- Deconnexion ---------- */
+
+$('deconnexion').addEventListener('click', async () => {
+  try {
+    await appeler('/api/session',
+      {method: 'POST', body: JSON.stringify({action: 'deconnexion'})});
+  } catch { /* le cookie tombera de toute facon a l'expiration */ }
+  location.href = '/';
+});
+
+recharger();
+</script>
+</body>
+</html>

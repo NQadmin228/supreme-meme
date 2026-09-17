@@ -1,0 +1,12 @@
+# Le tableau de bord contient les donnees : jamais versionne.
+index.html
+.vercel
+node_modules
+
+.vercel
+.acces_secret
+liens_personnels.txt
+index.html.reel
+.env.local
+
+.env*

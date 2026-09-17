@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__NOM__ — Tableau de bord de direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* =====================================================================
+   PALETTE
+   ---------------------------------------------------------------------
+   Les couleurs de SERIE ne sont pas choisies a l'oeil : le triplet
+   DRINK / EAT / SMOKE a ete valide par le validateur de palette sur le
+   fond reel de ce dashboard (#12211F), en mode "toutes paires".
+     retenu   #199e70 / #d95926 / #9085e9
+     ecarte   #3E8E86 / #C9A227 / #C08FD8  (l'ancien triplet : hors bande
+              de luminosite, teal sous le plancher de chroma, et surtout
+              separation tritan de 5,7 seulement — un daltonien tritan ne
+              distinguait pas DRINK de EAT)
+   Le triplet retenu passe toutes les paires : CVD 9,4 · normal 24,6 ·
+   tritan 9,4 · contraste >= 3:1.
+
+   Il n'y a AUCUN or dans la marque. La premiere version en supposait
+   un (#C9A227), sur la foi d'un vert foret egalement suppose. Le logo
+   reel est blanc sur #004F5E : bleu-vert petrole, teinte 190 degres.
+   L'accent d'interface est donc un cyan clair (#7FD9E8), et le
+   graphique dispose de deux teintes distinctes selon l'usage --
+   --accent-mark pour une serie unique, --compare pour la seconde
+   serie d'une comparaison.
+
+   Les couleurs de STATUT sont reservees et ne servent jamais de serie.
+   Elles sont toujours accompagnees d'un libelle, jamais seules.
+   ===================================================================== */
+:root{
+  /* =========================================================
+     SURFACES — derivees de la couleur exacte du logo
+     ---------------------------------------------------------
+     Le logo TABOO est blanc sur #004F5E : un bleu-vert petrole,
+     teinte 190 degres, saturation 100 %, luminosite 18 %. Toutes
+     les surfaces descendent de cette teinte, ce qui donne une
+     interface qui appartient visiblement a la marque plutot que
+     de s'en approcher.
+
+     La version precedente supposait un vert foret (#0B1615) et un
+     accent or (#C9A227). Les deux etaient faux : la marque ne
+     contient aucun or, et sa teinte est nettement plus bleue.
+     ========================================================= */
+  --brand:#004F5E;        /* la couleur du logo, a l'octet pres */
+  --bg:#001A20;
+  --surface:#002A33;
+  --surface2:#00363F;
+  --surface3:#00444F;
+  --line:#0A5666;         /* filets et separateurs */
+  --line-strong:#2C8598;  /* bordures interactives — 3,56:1 sur --surface */
+
+  /* --- encre : le logo est blanc pur, l'interface le suit --- */
+  --ink:#FFFFFF;          /* 15,2:1 sur --surface */
+  --ink-dim:#9EC4CC;      /*  8,1:1 */
+  --ink-faint:#6E939B;    /*  4,6:1 — jamais sur --brand, ou il tombe a 2,8:1 */
+
+  /* --- accents d'interface --- */
+  --accent:#7FD9E8;       /* nav active, valeurs vedettes — 9,4:1 */
+  --accent-mark:#0FA3BF;  /* marques de graphique a serie unique.
+                             Passe la bande de luminosite ET le plancher
+                             de chroma, ce que --accent ne fait pas :
+                             trop clair pour une marque de donnees. */
+  --compare:#c98500;      /* 2e serie d'une comparaison. Valide face au
+                             bleu sequentiel : CVD 27,4 · normal 30,7.
+                             Un cyan de marque y serait indistinguable
+                             du bleu voisin. */
+
+  /* --- series categorielles (ordre fixe, jamais cycle) ---
+     Inchangees, et revalidees sur le NOUVEAU fond #002A33 en mode
+     toutes paires : CVD 9,4 · normal 24,6 · tritan 9,4 · contraste
+     >= 3:1. C'est le seul triplet teste qui tienne aussi la
+     separation tritan. */
+  --s-drink:#199e70; --s-eat:#d95926; --s-smoke:#9085e9;
+  --s-drink-soft:rgba(25,158,112,.22);
+  --s-eat-soft:rgba(217,89,38,.22);
+  --s-smoke-soft:rgba(144,133,233,.22);
+
+  /* --- statut (reserve, jamais serie) — tous >= 3:1 sur --surface --- */
+  --st-good:#0ca30c; --st-warn:#fab219; --st-serious:#ec835a; --st-crit:#d03b3b;
+
+  /* --- rampe sequentielle : une seule teinte, sombre -> clair ---
+     Bleu et non cyan : une rampe cyan sur un fond bleu-vert verrait
+     ses premiers pas se fondre dans la surface. */
+  --seq-1:#184f95; --seq-2:#1c5cab; --seq-3:#256abf; --seq-4:#2a78d6;
+  --seq-5:#3987e5; --seq-6:#5598e7; --seq-7:#86b6ef; --seq-8:#b7d3f6;
+
+  /* --- chrome de graphique --- */
+  --grid:#0A3A45; --axis:#12505F;
+  --radius:4px;
+  /* Jost : geometrique, O circulaires, proche des lettres du logo.
+     Reserve a la marque et aux titres. Les chiffres et les
+     graphiques restent en Inter, plus lisible en petit corps. */
+  --font-display:'Jost',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font-body);
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+/* tabular-nums reserve aux colonnes qui doivent s'aligner verticalement */
+.tab,td.num,th.num,.axis-like{font-variant-numeric:tabular-nums;}
+a{color:var(--s-drink);}
+
+/* ---------- Layout ---------- */
+.shell{display:block; min-height:100vh;}
+
+/* ---------- Tiroir de navigation ----------
+   La barre laterale occupait 266 px en permanence. Elle devient un
+   tiroir hors-ecran, ce qui rend cette largeur au contenu -- les
+   tableaux a dix colonnes et la carte de chaleur horaire en profitent
+   directement.
+
+   Le tiroir est en position fixed et ne participe pas au flux : ouvrir
+   ou fermer le menu ne modifie donc PAS la largeur du contenu, et les
+   graphiques n'ont pas a se redimensionner. */
+.sidebar{
+  position:fixed; top:0; left:0; z-index:60;
+  width:270px; height:100vh; overflow-y:auto;
+  background:var(--surface); border-right:1px solid var(--line);
+  padding:22px 0;
+  transform:translateX(-100%);
+  transition:transform .22s ease;
+  box-shadow:none;
+}
+.sidebar.ouvert{transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,.5);}
+@media(prefers-reduced-motion:reduce){ .sidebar{transition:none;} }
+
+/* Voile : ferme le tiroir au clic et signale que l'arriere-plan est
+   inactif. */
+.voile{position:fixed; inset:0; z-index:55; background:rgba(0,10,13,.55);
+  backdrop-filter:blur(2px);}
+
+/* Bouton hamburger */
+.hamburger{
+  display:flex; flex-direction:column; justify-content:center; gap:4px;
+  width:38px; height:38px; flex:none; padding:0 9px;
+  background:var(--surface2); border:1px solid var(--line-strong);
+  border-radius:var(--radius); cursor:pointer;
+}
+.hamburger:hover{border-color:var(--accent); background:var(--surface3);}
+.hamburger span{display:block; height:2px; background:var(--ink);
+  border-radius:2px; transition:transform .22s, opacity .22s;}
+.hamburger[aria-expanded="true"] span:nth-child(1){transform:translateY(6px) rotate(45deg);}
+.hamburger[aria-expanded="true"] span:nth-child(2){opacity:0;}
+.hamburger[aria-expanded="true"] span:nth-child(3){transform:translateY(-6px) rotate(-45deg);}
+.hamburger:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+.entete-gauche{display:flex; align-items:center; gap:12px; min-width:0;}
+.marque-compacte{flex:none; border-radius:3px; display:block;
+  /* 34 px rendaient le lettrage du logo illisible. A 42 px il se lit
+     comme une pastille de marque, ce qu'il doit etre a cote du titre. */
+  width:42px; height:42px;}
+@media(max-width:760px){ .marque-compacte{width:34px; height:34px;} }
+.brand{background:var(--brand); padding:18px 20px 16px;
+  border-bottom:1px solid var(--line); margin-bottom:14px; text-align:center;}
+.brand img{display:block; width:118px; height:118px; margin:0 auto 2px;
+  /* Le JPEG a le meme fond que le bloc : aucune bordure ni coin
+     arrondi, sinon la jointure devient visible. */
+  border:0;}
+.brand-sub{font-size:10.5px; color:#B8DCE3; margin-top:6px; line-height:1.45;
+  letter-spacing:.4px;}
+/* Sur --brand, --ink-faint ne fait que 2,8:1 : on eclaircit. */
+.nav-group-label{padding:14px 20px 6px; font-size:10.5px; color:var(--ink-faint);
+  font-weight:600; letter-spacing:.6px; text-transform:uppercase;}
+.nav-item{display:flex; align-items:center; gap:7px; padding:9px 18px 9px 22px;
+  color:var(--ink-dim); text-decoration:none; font-size:13.5px;
+  border-left:2px solid transparent; cursor:pointer; transition:background .12s,color .12s;}
+.nav-item:hover{background:var(--surface2); color:var(--ink);}
+.nav-item.active{color:var(--ink); border-left-color:var(--accent);
+  background:var(--surface2); font-weight:500;}
+.nav-item .dot{width:6px; height:6px; border-radius:50%; flex:none;}
+.nav-item .dot.warn{background:var(--st-warn);}
+.nav-item .dot.crit{background:var(--st-crit);}
+.nav-item .dot.new{background:var(--s-drink);}
+
+.main{min-width:0;}
+.topbar{position:sticky; top:0; z-index:20; background:rgba(11,22,21,.94);
+  backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+  padding:14px 30px; display:flex; align-items:flex-end;
+  justify-content:space-between; gap:20px; flex-wrap:wrap;}
+.page-title{font-family:var(--font-display); font-size:27px; font-weight:500;
+  line-height:1.15; letter-spacing:1.2px; text-transform:uppercase;}
+.page-sub{font-size:12.5px; color:var(--ink-faint); margin-top:3px;}
+
+/* ---------- Le coin du compte ---------- */
+/* Depuis que l'acces est nominatif, le tableau de bord doit dire QUI
+   est connecte : un mot de passe partage n'avait personne a nommer.
+   Le bloc reste vide -- et donc invisible -- tant que /api/session n'a
+   pas repondu : afficher « Chargement... » a cet endroit ferait
+   sautiller la barre a chaque visite pour une information secondaire. */
+/* La barre de compte ne se replie pas : ses libelles sont courts et
+   les couper les rendrait ambigus (« Adm... »). Elle defile donc dans
+   sa propre largeur.
+
+   Sans `min-width:0`, un enfant en `white-space:nowrap` impose sa
+   largeur intrinseque a son parent flex et `overflow-x` n'a aucun
+   effet : la barre poussait le document a 609 px sur un ecran de 375,
+   et TOUTES les pages des deux etablissements defilaient
+   horizontalement -- y compris celles ou rien n'est large. */
+.compte-barre{display:flex; align-items:center; gap:8px; font-size:12.5px;
+  color:var(--ink-faint); white-space:nowrap;
+  min-width:0; overflow-x:auto; overflow-y:hidden;
+  -webkit-overflow-scrolling:touch; scrollbar-width:none;}
+.compte-barre::-webkit-scrollbar{display:none;}
+.compte-barre > *{flex:none;}
+.compte-barre[hidden]{display:none;}
+.compte-barre .nom{color:var(--ink-dim); font-weight:600;}
+.compte-barre .btn{text-decoration:none; display:inline-block;}
+
+/* Le selecteur d'etablissement : des onglets colles, pas des boutons
+   epars. Accoles, ils se lisent comme un choix entre deux etats du meme
+   objet ; espaces, ils se liraient comme deux actions independantes. */
+.choix-etab{display:flex; gap:0;}
+.choix-etab .btn{border-radius:0; margin:0;}
+.choix-etab .btn:first-child{border-radius:var(--radius) 0 0 var(--radius);}
+.choix-etab .btn:last-child{border-radius:0 var(--radius) var(--radius) 0;}
+.choix-etab .btn + .btn{border-left:none;}
+.choix-etab .btn.on{background:var(--surface3); color:var(--accent);
+  font-weight:600;}
+
+/* ---------- Filtre de periode : une seule rangee, au-dessus des graphiques ---------- */
+.filters{display:flex; align-items:center; gap:7px; font-size:12.5px; flex-wrap:wrap;}
+.filters input[type=date]{background:var(--surface2); border:1px solid var(--line);
+  color:var(--ink); padding:6px 9px; border-radius:var(--radius);
+  font-family:var(--font-body); font-size:12.5px; color-scheme:dark;}
+.btn{background:var(--surface2); border:1px solid var(--line); color:var(--ink-dim);
+  padding:6px 11px; border-radius:var(--radius); cursor:pointer; font-size:12.5px;
+  font-family:var(--font-body); transition:border-color .12s,color .12s,background .12s;}
+.btn:hover{border-color:var(--s-drink); color:var(--ink);}
+.btn.on{background:var(--surface3); border-color:var(--accent); color:var(--ink); font-weight:500;}
+.btn.primary{background:#1d4f47; border-color:var(--s-drink); color:var(--ink);}
+.btn.primary:hover{background:#236055;}
+.filters.off{opacity:.35; pointer-events:none;}
+.filter-note{font-size:11.5px; color:var(--ink-faint);}
+
+.content{padding:24px 30px 90px;}
+.page{display:none;}
+.page.active{display:block;}
+
+/* ---------- Bandeaux ---------- */
+.note{border:1px solid var(--line); border-left:3px solid var(--accent);
+  background:var(--surface); padding:12px 15px; border-radius:var(--radius);
+  font-size:13px; color:var(--ink-dim); margin-bottom:18px; line-height:1.6;}
+.note strong{color:var(--ink);}
+.note.crit{border-left-color:var(--st-crit);}
+.note.warn{border-left-color:var(--st-warn);}
+.note.good{border-left-color:var(--st-good);}
+.note.info{border-left-color:var(--seq-5);}
+.note-title{display:flex; align-items:center; gap:7px; color:var(--ink);
+  font-weight:600; font-size:13px; margin-bottom:5px;}
+
+/* ---------- Grilles & cartes ---------- */
+.grid{display:grid; gap:14px; margin-bottom:20px;}
+.g4{grid-template-columns:repeat(4,1fr);}
+.g3{grid-template-columns:repeat(3,1fr);}
+.g2{grid-template-columns:repeat(2,1fr);}
+.g21{grid-template-columns:2fr 1fr;}
+.g12{grid-template-columns:1fr 2fr;}
+@media(max-width:1240px){.g4{grid-template-columns:repeat(2,1fr);}
+  .g3,.g21,.g12{grid-template-columns:1fr;}}
+@media(max-width:760px){.g4,.g3,.g2{grid-template-columns:1fr;}}
+
+/* ---------- Petit ecran ----------
+   Le tiroir est le MEME a toutes les largeurs : un seul comportement a
+   comprendre, et il n'y a plus de bandeau horizontal a maintenir en
+   parallele. */
+@media(max-width:760px){
+  .sidebar{width:86vw; max-width:300px;}
+  .topbar{position:static; padding:12px 14px;}
+  .content{padding:18px 14px 70px;}
+  .page-title{font-size:19px;}
+  .page-sub{display:none;}
+  .stat .v{font-size:24px;} .stat.hero .v{font-size:28px;}
+  .filters{width:100%;}
+}
+
+.card{background:var(--surface); border:1px solid var(--line);
+  border-radius:var(--radius); padding:16px 18px; min-width:0;}
+.card h3{margin:0 0 3px; font-family:var(--font-body); font-size:12.5px;
+  font-weight:600; color:var(--ink); letter-spacing:.1px;}
+.card .sub{font-size:11.5px; color:var(--ink-faint); margin-bottom:12px; line-height:1.45;}
+.card h3+.chart-wrap,.card h3+.tbl,.card h3+.scroll-y{margin-top:12px;}
+
+/* ---------- Tuiles de chiffre ---------- */
+.stat{background:var(--surface); border:1px solid var(--line);
+  border-left:2px solid var(--surface3); border-radius:var(--radius); padding:15px 17px;}
+.stat .k{font-size:11.5px; color:var(--ink-dim); font-weight:600; letter-spacing:.2px;}
+.stat .v{font-size:27px; font-weight:600; color:var(--ink); line-height:1.15; margin-top:7px;}
+.stat .u{font-size:13px; color:var(--ink-faint); font-weight:400; margin-left:5px;}
+.stat .d{font-size:11.5px; color:var(--ink-faint); margin-top:5px; line-height:1.4;}
+.stat.accent{border-left-color:var(--accent);} .stat.accent .v{color:var(--accent);}
+.stat.good{border-left-color:var(--st-good);}
+.stat.warn{border-left-color:var(--st-warn);}
+.stat.crit{border-left-color:var(--st-crit);} .stat.crit .v{color:var(--st-crit);}
+.stat.hero .v{font-size:34px; letter-spacing:-.3px;}
+
+/* ---------- Graphiques ---------- */
+.chart-wrap{position:relative; height:270px;}
+.chart-wrap.xs{height:170px;} .chart-wrap.s{height:210px;}
+.chart-wrap.l{height:330px;} .chart-wrap.xl{height:420px;}
+
+/* ---------- Tableaux ---------- */
+table{width:100%; border-collapse:collapse; font-size:12.5px;}
+th{text-align:left; padding:7px 9px; color:var(--ink-faint); font-weight:600;
+  font-size:11px; letter-spacing:.3px; border-bottom:1px solid var(--line);
+  background:var(--surface); position:sticky; top:0; z-index:1;}
+td{padding:7px 9px; border-bottom:1px solid var(--line-soft); color:var(--ink-dim);}
+tr:last-child td{border-bottom:none;}
+td.num,th.num{text-align:right; color:var(--ink);}
+td.strong{color:var(--ink); font-weight:500;}
+tbody tr:hover td{background:var(--surface2);}
+.scroll-y{max-height:380px; overflow-y:auto; overflow-x:auto;}
+.scroll-y.tall{max-height:560px;}
+.tbl{overflow-x:auto;}
+.rank{color:var(--ink-faint); width:26px; font-size:11px;}
+tr.total td{border-top:1px solid var(--line); color:var(--ink);
+  font-weight:600; background:var(--surface2);}
+
+/* ---------- Etiquettes ---------- */
+.pill{display:inline-flex; align-items:center; gap:5px; padding:2px 8px;
+  border-radius:20px; font-size:10.5px; font-weight:600; letter-spacing:.2px;
+  background:var(--surface2); color:var(--ink-dim); border:1px solid var(--line);
+  white-space:nowrap;}
+.pill i{width:6px; height:6px; border-radius:50%; flex:none; display:block;}
+.pill.drink i{background:var(--s-drink);} .pill.eat i{background:var(--s-eat);}
+.pill.smoke i{background:var(--s-smoke);}
+.pill.good{color:#7ede7e; border-color:#1c5e1c;} .pill.good i{background:var(--st-good);}
+.pill.warn{color:#f8d98a; border-color:#6b5312;} .pill.warn i{background:var(--st-warn);}
+.pill.serious{color:#f2b79c; border-color:#7a4530;} .pill.serious i{background:var(--st-serious);}
+.pill.crit{color:#f0a0a0; border-color:#7a2020;} .pill.crit i{background:var(--st-crit);}
+
+/* ---------- Legende (toujours presente des 2 series) ---------- */
+.legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px;
+  color:var(--ink-dim); margin-bottom:10px;}
+.legend span{display:inline-flex; align-items:center; gap:6px;}
+.legend i{width:9px; height:9px; border-radius:2px; display:block;}
+
+/* ---------- Bandeau de chargement d'un jeu ---------- */
+/* L'attribut hidden repose sur la regle navigateur [hidden]{display:none},
+   qu'une declaration de classe ecrase : sans cette ligne, le bandeau
+   reste visible alors que el.hidden vaut true. */
+.charge-jeu[hidden]{display:none !important;}
+.charge-jeu{display:flex; align-items:center; gap:10px; padding:11px 15px;
+  margin-bottom:16px; border:1px solid var(--line);
+  border-left:3px solid var(--accent); background:var(--surface);
+  border-radius:var(--radius); font-size:13px; color:var(--ink-dim);}
+.charge-jeu .tourne{width:15px; height:15px; flex:none; border-radius:50%;
+  border:2px solid var(--line-strong); border-top-color:var(--accent);
+  animation:tourne .8s linear infinite;}
+@keyframes tourne{to{transform:rotate(360deg)}}
+
+/* ---------- Exploration hierarchique ---------- */
+.fil{display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+  margin-bottom:16px; font-size:13px;}
+.fil a{color:var(--accent); text-decoration:none; cursor:pointer;
+  padding:4px 10px; border:1px solid var(--line-strong); border-radius:20px;
+  background:var(--surface);}
+.fil a:hover{background:var(--surface2); border-color:var(--accent);}
+.fil .sep{color:var(--ink-faint);}
+.fil .ici{color:var(--ink); font-weight:600; padding:4px 10px;
+  border:1px solid var(--accent); border-radius:20px; background:var(--surface2);}
+tr.cliquable{cursor:pointer;}
+tr.cliquable:hover td{background:var(--surface3);}
+tr.cliquable td:nth-child(2)::after{content:' A'; color:var(--accent); font-weight:700;}
+.niveau-fin{font-size:11.5px; color:var(--ink-faint); margin-top:10px;}
+
+/* ---------- Export Excel ---------- */
+.export-xlsx{border-color:var(--line-strong); color:var(--ink-dim); white-space:nowrap;}
+.export-xlsx:hover{border-color:var(--accent); color:var(--ink); background:var(--surface2);}
+.barre-export{display:flex; justify-content:flex-end; margin:0 0 10px;}
+.filtre-tbl .export-xlsx{margin-left:auto;}
+
+/* ---------- Filtre de tableau ---------- */
+/* Elle se replie : a 375 px, le champ (300 px), le compte de lignes et
+   le bouton d'export ne tiennent pas cote a cote, et le bouton sortait
+   de l'ecran. Il passe desormais a la ligne. */
+.filtre-tbl{display:flex; align-items:center; gap:10px; margin:0 0 10px;
+  flex-wrap:wrap;}
+.filtre-tbl input{
+  flex:1; max-width:300px; background:var(--surface2);
+  border:1px solid var(--line-strong); color:var(--ink);
+  padding:7px 11px; border-radius:var(--radius);
+  font-family:var(--font-body); font-size:12.5px;
+}
+.filtre-tbl input::placeholder{color:var(--ink-faint);}
+.filtre-tbl input:focus{outline:none; border-color:var(--accent);}
+.filtre-tbl .compte{font-size:11.5px; color:var(--ink-faint); white-space:nowrap;}
+.aucun-resultat{padding:16px 10px; color:var(--ink-faint); font-size:12.5px;}
+
+/* ---------- Bascule tableau / graphique ---------- */
+.card-head{display:flex; justify-content:space-between; align-items:flex-start;
+  gap:12px; flex-wrap:wrap;}
+.card-head > :first-child{min-width:0; flex:1 1 240px;}
+.mini{background:none; border:1px solid var(--line); color:var(--ink-faint);
+  font-size:10.5px; padding:3px 8px; border-radius:20px; cursor:pointer;
+  font-family:var(--font-body); white-space:nowrap;}
+.mini:hover{color:var(--ink); border-color:var(--ink-faint);}
+.alt-table{display:none; margin-top:12px;}
+.alt-table.on{display:block;}
+
+/* ---------- Barres en ligne (dans les tableaux) ---------- */
+.bar{height:6px; border-radius:3px; background:var(--surface3); overflow:hidden; min-width:44px;}
+.bar i{display:block; height:100%; border-radius:3px;}
+
+/* ---------- Cascade textuelle du compte de resultat ---------- */
+.casc{font-size:13px;}
+.casc .r{display:flex; align-items:baseline; gap:12px; padding:8px 0;
+  border-bottom:1px solid var(--line-soft);}
+.casc .r.tot{border-top:1px solid var(--line); border-bottom:none;
+  margin-top:3px; font-weight:600; color:var(--ink);}
+.casc .lbl{flex:1; color:var(--ink-dim);}
+.casc .r.tot .lbl{color:var(--ink);}
+.casc .amt{font-variant-numeric:tabular-nums; text-align:right; min-width:130px; color:var(--ink);}
+.casc .pc{font-variant-numeric:tabular-nums; text-align:right; min-width:62px; color:var(--ink-faint); font-size:12px;}
+.casc .neg .amt{color:var(--st-serious);}
+
+.foot{font-size:11.5px; color:var(--ink-faint); margin-top:9px; line-height:1.55;}
+.foot code{background:var(--surface2); padding:1px 5px; border-radius:2px; font-size:11px;}
+.sec{font-family:var(--font-display); font-size:19px; font-weight:500;
+  letter-spacing:.8px; text-transform:uppercase;
+  margin:30px 0 12px; padding-top:18px; border-top:1px solid var(--line);}
+.sec:first-child{margin-top:0; padding-top:0; border-top:none;}
+
+::-webkit-scrollbar{width:9px; height:9px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--surface3); border-radius:5px;}
+::-webkit-scrollbar-thumb:hover{background:#2a4442;}
+
+/* ---------- Impression (la direction imprime toujours) ---------- */
+@media print{
+  body{background:#fff; color:#000;}
+  .sidebar,.filters,.mini{display:none!important;}
+  .page{display:block!important; page-break-after:always;}
+  .card,.stat{border-color:#ccc; background:#fff;}
+}
+
+/* =========================================================
+   SURCHARGE D'ETABLISSEMENT
+   ---------------------------------------------------------
+   Posee en dernier : a specificite egale, la derniere regle
+   l'emporte. TABOO n'en a aucune -- ses jetons SONT ceux
+   ci-dessus, et les recopier ailleurs creerait deux sources
+   pour une meme couleur. Seul AMNESIA surcharge, et
+   seulement ce qui differe. Voir lib/etablissements.js.
+   ========================================================= */
+__THEME__
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <nav class="sidebar" id="sidebar" aria-label="Navigation principale"></nav>
+  <div class="voile" id="voile" hidden></div>
+  <div class="main">
+    <div class="topbar">
+      <div class="entete-gauche">
+        <button class="hamburger" id="hamburger" type="button"
+                aria-label="Ouvrir le menu" aria-expanded="false"
+                aria-controls="sidebar">
+          <span></span><span></span><span></span>
+        </button>
+        <!-- La marque vivait uniquement dans la barre laterale. Celle-ci
+             etant desormais fermee par defaut, le logo disparaissait de
+             l'ecran : il remonte ici. -->
+        <img class="marque-compacte" id="marqueCompacte" alt="TABOO"
+             width="42" height="42">
+        <div>
+          <div class="page-title" id="pageTitle">Synthèse</div>
+          <div class="page-sub" id="pageSub"></div>
+        </div>
+      </div>
+      <div class="filters" id="filters">
+        <button class="btn" data-preset="90">90 j</button>
+        <button class="btn" data-preset="180">6 mois</button>
+        <button class="btn" data-preset="365">12 mois</button>
+        <button class="btn on" data-preset="all">Tout</button>
+        <input type="date" id="d1"><span style="color:var(--ink-faint)">→</span><input type="date" id="d2">
+        <button class="btn primary" id="apply">Appliquer</button>
+        <span class="filter-note" id="filterNote"></span>
+      </div>
+      <div class="compte-barre" id="compteBarre" hidden></div>
+    </div>
+    <!-- Calque d'etat, SEPARE de #content qui contient les sections de
+         pages : y ecrire l'ecran de chargement les detruirait. -->
+    <div id="ecran-etat"></div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<script>
+/* Les donnees ne sont plus embarquees. Un socle est charge au demarrage,
+   les jeux lourds arrivent quand une page en a besoin. */
+let DATA = null;
+
+/* =====================================================================
+   COULEURS — lues depuis les variables CSS, jamais redeclarees en dur
+   ===================================================================== */
+/* Quel etablissement cette coquille sert-elle ? Pose par l'assembleur.
+   Le chargeur s'en sert pour choisir son dossier de donnees, et le
+   selecteur de la barre pour marquer l'onglet courant. */
+window.TABOO_ETABLISSEMENT = '__ETABLISSEMENT__';
+window.TABOO_NOM = '__NOM__';
+
+const CSSVAR = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const ACT = ['DRINK','EAT','SMOKE'];                 // ordre FIXE, jamais cycle
+const C = {
+  DRINK: CSSVAR('--s-drink'), EAT: CSSVAR('--s-eat'), SMOKE: CSSVAR('--s-smoke'),
+  soft: {DRINK:CSSVAR('--s-drink-soft'), EAT:CSSVAR('--s-eat-soft'), SMOKE:CSSVAR('--s-smoke-soft')},
+  good:CSSVAR('--st-good'), warn:CSSVAR('--st-warn'),
+  serious:CSSVAR('--st-serious'), crit:CSSVAR('--st-crit'),
+  ink:CSSVAR('--ink'), dim:CSSVAR('--ink-dim'), faint:CSSVAR('--ink-faint'),
+  grid:CSSVAR('--grid'), axis:CSSVAR('--axis'), surface:CSSVAR('--surface'),
+  brand:CSSVAR('--brand'),
+  /* accent      : interface (nav active, valeurs vedettes)
+     accentMark  : marques de graphique a SERIE UNIQUE. --accent est trop
+                   clair pour porter de la donnee : il sort de la bande de
+                   luminosite et se lit mal comme surface pleine.
+     compare     : 2e serie d'une comparaison. Valide face au bleu
+                   sequentiel a CVD 27,4 / normal 30,7 ; un cyan de marque
+                   y serait indistinguable du bleu voisin. */
+  accent:CSSVAR('--accent'),
+  accentMark:CSSVAR('--accent-mark'),
+  compare:CSSVAR('--compare'),
+  seq:[1,2,3,4,5,6,7,8].map(i=>CSSVAR('--seq-'+i)),
+};
+
+/* =====================================================================
+   FORMATAGE
+   ---------------------------------------------------------------------
+   Les montants sont en francs CFA et atteignent le milliard. Ecrits en
+   entier sur un axe, ils mangent la moitie de la largeur utile et se
+   chevauchent. Sur les AXES on abrege (1,04 Md · 687 M) ; dans les
+   TABLEAUX et les tuiles on garde le chiffre exact, aligne.
+   ===================================================================== */
+const NF = new Intl.NumberFormat('fr-FR');
+const NF1 = new Intl.NumberFormat('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1});
+const NF2 = new Intl.NumberFormat('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const F  = n => NF.format(Math.round(n||0));
+const F1 = n => NF1.format(n||0);
+const F2 = n => NF2.format(n||0);
+const PCT = (a,b) => b ? (100*a/b) : 0;
+const P1 = (a,b) => F1(PCT(a,b))+' %';
+
+function Fc(n){                                    // format compact pour axes
+  n = n||0; const a = Math.abs(n);
+  if(a >= 1e9) return NF2.format(n/1e9)+' Md';
+  if(a >= 1e6) return NF.format(Math.round(n/1e6))+' M';
+  if(a >= 1e4) return NF.format(Math.round(n/1e3))+' k';
+  return NF.format(Math.round(n));
+}
+const FCFA = n => F(n)+' F';
+
+/* =====================================================================
+   AGREGATION
+   ===================================================================== */
+function sum(rows,k){ let s=0; for(const r of rows) s += (r[k]||0); return s; }
+function sums(rows,keys){
+  const o = {}; for(const k of keys) o[k]=0;
+  for(const r of rows) for(const k of keys) o[k] += (r[k]||0);
+  return o;
+}
+function groupBy(rows,keyFn,sumKeys){
+  const m = new Map();
+  for(const r of rows){
+    const k = keyFn(r);
+    if(k===undefined||k===null) continue;
+    let acc = m.get(k);
+    if(!acc){ acc = {}; for(const sk of sumKeys) acc[sk]=0; m.set(k,acc); }
+    for(const sk of sumKeys) acc[sk] += (r[sk]||0);
+  }
+  return m;
+}
+const inRange = (rows,a,b) => rows.filter(r => r.d>=a && r.d<=b);
+
+/* =====================================================================
+   CALENDRIER
+   ===================================================================== */
+const JOURS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+const MOIS = ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'];
+const dOf = s => new Date(s+'T00:00:00');
+const jourNum = s => (dOf(s).getDay()+6)%7;          // 0 = lundi
+const moisKey = s => s.slice(0,7);
+const moisLabel = s => MOIS[dOf(s).getMonth()]+' '+dOf(s).getFullYear().toString().slice(2);
+const dateLabel = s => dOf(s).getDate()+' '+MOIS[dOf(s).getMonth()]+' '+dOf(s).getFullYear();
+// L'axe horaire suit ordre_nuit (14h -> 13h) : trier sur l'heure brute
+// placerait minuit, qui est le pic d'activite, a l'extreme gauche et
+// couperait la soiree en deux.
+const HEURES_NUIT = Array.from({length:24},(_,i)=>(i+14)%24);
+
+/* =====================================================================
+   ETAT
+   ===================================================================== */
+const state = {
+  page:'synthese',
+  start:null,
+  end:null,
+  preset:'all',
+  // Position dans l'exploration hierarchique : null = niveau activite,
+  // {t} = familles d'une activite, {t,c} = produits d'une famille.
+  explo:{t:null, c:null},
+};
+const charts = {};
+
+/* =====================================================================
+   SOCLE CHART.JS
+   ---------------------------------------------------------------------
+   Regles appliquees partout :
+     - marques fines, extremites arrondies a 4px ancrees a la ligne de base
+     - lignes 2px, points >= 8px au survol
+     - 2px de fond entre segments empiles et barres adjacentes
+     - grille et axes recessifs
+     - infobulle au survol par defaut (un graphique HTML est interactif)
+     - JAMAIS deux echelles Y sur un meme graphique
+   ===================================================================== */
+if(window.Chart){
+  Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
+  Chart.defaults.font.size = 11.5;
+  Chart.defaults.color = C.faint;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.animation.duration = 320;
+}
+
+const TOOLTIP = {
+  backgroundColor:'#0d1a19', borderColor:C.axis, borderWidth:1,
+  titleColor:C.ink, bodyColor:C.dim, padding:10, cornerRadius:4,
+  displayColors:true, boxWidth:9, boxHeight:9, boxPadding:4,
+  titleFont:{weight:'600',size:12}, bodyFont:{size:11.5},
+};
+
+function axisY(fmt){
+  return {grid:{color:C.grid,drawTicks:false}, border:{display:false},
+          ticks:{color:C.faint, padding:7, callback:v=>(fmt||Fc)(v)}};
+}
+function axisX(opts){
+  return Object.assign({grid:{display:false}, border:{color:C.axis},
+                        ticks:{color:C.faint, maxRotation:0, autoSkipPadding:14}}, opts||{});
+}
+// legende Chart.js : presente des 2 series, jamais pour une seule
+function legendTop(show){
+  return {display:show!==false, position:'top', align:'start',
+          labels:{color:C.dim, boxWidth:9, boxHeight:9, padding:14,
+                  usePointStyle:true, pointStyle:'rectRounded', font:{size:11.5}}};
+}
+
+function setChart(id,cfg){
+  if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+  const el = document.getElementById(id);
+  if(!el || !window.Chart) return;
+  charts[id] = new Chart(el, cfg);
+}
+
+/* Barre : extremites arrondies a 4px cote valeur, ancrees a la base */
+const BAR = {borderRadius:4, borderSkipped:'start', maxBarThickness:38,
+             borderWidth:2, borderColor:C.surface};
+/* Segment empile : 2px de fond entre segments */
+const STACK = {borderRadius:3, borderWidth:2, borderColor:C.surface, maxBarThickness:38};
+/* Ligne : 2px, point cache au repos, >= 8px au survol */
+const LINE = {borderWidth:2, tension:.25, pointRadius:0, pointHoverRadius:5,
+              pointHitRadius:14, pointBorderWidth:2, pointBorderColor:C.surface};
+
+/* =====================================================================
+   FABRIQUES DE GRAPHIQUES
+   ===================================================================== */
+function lineParActivite(id, rows, valKey, fmt){
+  const m = new Map();
+  for(const r of rows){
+    const k = moisKey(r.d);
+    if(!m.has(k)) m.set(k,{DRINK:0,EAT:0,SMOKE:0,lab:moisLabel(r.d)});
+    m.get(k)[r.a] += (r[valKey]||0);
+  }
+  const ks = [...m.keys()].sort();
+  setChart(id,{type:'line', data:{
+    labels:ks.map(k=>m.get(k).lab),
+    datasets:ACT.map(a=>Object.assign({},LINE,{
+      label:a, data:ks.map(k=>m.get(k)[a]),
+      borderColor:C[a], backgroundColor:C[a], pointBackgroundColor:C[a],
+    }))},
+    options:{interaction:{mode:'index',intersect:false},
+      plugins:{legend:legendTop(true), tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+c.dataset.label+' : '+(fmt||FCFA)(c.parsed.y)}})},
+      scales:{y:axisY(fmt===P1?(v=>F1(v)+' %'):null), x:axisX()}}});
+}
+
+function barHorizontale(id, labels, values, couleur, fmt, labelSerie){
+  setChart(id,{type:'bar', data:{labels, datasets:[Object.assign({},BAR,{
+      label:labelSerie||'', data:values,
+      backgroundColor:Array.isArray(couleur)?couleur:couleur,
+      borderSkipped:'start',
+    })]},
+    options:{indexAxis:'y',
+      // L'etiquette de pourcentage se dessine apres la barre : sans marge,
+      // celle de la plus longue deborde de la zone de trace.
+      layout:{padding:{right:46}},
+      plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+(fmt||FCFA)(c.parsed.x)}})},
+      scales:{x:Object.assign(axisY(fmt),{grid:{color:C.grid,drawTicks:false}}),
+              y:{grid:{display:false}, border:{color:C.axis},
+                 ticks:{color:C.dim, font:{size:11}, autoSkip:false}}}},
+    // Toutes les barres horizontales du tableau de bord comparent des
+    // PARTS : la valeur relative y est donc affichee par defaut.
+    plugins:[pctBarres('y')]});
+}
+
+/* =====================================================================
+   NAVIGATION
+   ===================================================================== */
+
+
+__NAV_META__
+
+
+/* Logo embarque en data URI : le tableau de bord reste un fichier
+   autonome, et le logo s'affiche meme sans reseau. 17 Ko. */
+const LOGO_TABOO = '__LOGO__';
+/* Le logo ne depend d'aucune donnee : on le pose tout de suite.
+
+   Il etait jusqu'ici assigne dans buildSidebar(), qui a besoin de DATA
+   pour dater la periode -- donc apres le chargement. Tout ecran affiche
+   AVANT les donnees montrait par consequent une image cassee : le
+   chargement, les erreurs, et l'ecran « en construction » d'AMNESIA, ou
+   le defaut s'est vu. */
+(function poserLogoCompact(){
+  const c = document.getElementById('marqueCompacte');
+  if(c) c.src = LOGO_TABOO;
+})();
+
+/* =====================================================================
+   TIROIR DE NAVIGATION
+   ---------------------------------------------------------------------
+   Ouverture par le bouton, fermeture par le voile, la touche Echap, ou
+   le choix d'une page. Le focus revient sur le bouton a la fermeture :
+   sans cela, un utilisateur au clavier se retrouve a naviguer dans un
+   menu invisible.
+   ===================================================================== */
+function basculerMenu(ouvrir){
+  const nav = document.getElementById('sidebar');
+  const bouton = document.getElementById('hamburger');
+  const voile = document.getElementById('voile');
+  const etat = ouvrir === undefined ? !nav.classList.contains('ouvert') : ouvrir;
+
+  nav.classList.toggle('ouvert', etat);
+  voile.hidden = !etat;
+  bouton.setAttribute('aria-expanded', String(etat));
+  bouton.setAttribute('aria-label', etat ? 'Fermer le menu' : 'Ouvrir le menu');
+  // Le fond ne doit pas defiler derriere le tiroir ouvert.
+  document.body.style.overflow = etat ? 'hidden' : '';
+
+  if(etat){
+    const premier = nav.querySelector('.nav-item.active') || nav.querySelector('.nav-item');
+    if(premier) premier.focus();
+  } else {
+    bouton.focus();
+  }
+}
+
+function initMenu(){
+  document.getElementById('hamburger').addEventListener('click', ()=>basculerMenu());
+  document.getElementById('voile').addEventListener('click', ()=>basculerMenu(false));
+  document.addEventListener('keydown', ev=>{
+    if(ev.key === 'Escape' && document.getElementById('sidebar').classList.contains('ouvert')){
+      basculerMenu(false);
+    }
+  });
+}
+
+function buildSidebar(){
+  const el = document.getElementById('sidebar');
+  let h = `<div class="brand">
+    <img src="${LOGO_TABOO}" alt="TABOO — Restaurant, Lounge, Bar" width="118" height="118">
+    <div class="brand-sub">${dateLabel(DATA.meta.periode_debut)}<br>→ ${dateLabel(DATA.meta.periode_fin)}</div>
+  </div>`;
+  for(const g of NAV){
+    h += `<div class="nav-group-label">${g.g}</div>`;
+    for(const p of g.p){
+      h += `<a class="nav-item" data-page="${p.id}">${p.dot?`<span class="dot ${p.dot}"></span>`:''}<span>${p.l}</span></a>`;
+    }
+  }
+  el.innerHTML = h;
+  const compacte = document.getElementById('marqueCompacte');
+  if(compacte) compacte.src = LOGO_TABOO;
+  el.querySelectorAll('.nav-item').forEach(a=>{
+    a.setAttribute('tabindex','0');
+    a.setAttribute('role','link');
+    const aller = ()=>{ basculerMenu(false); go(a.dataset.page); };
+    a.addEventListener('click', aller);
+    // Une entree de menu atteignable au clavier doit s'activer avec
+    // Entree ou Espace, comme un bouton natif.
+    a.addEventListener('keydown', ev=>{
+      if(ev.key === 'Enter' || ev.key === ' '){ ev.preventDefault(); aller(); }
+    });
+  });
+}
+
+async function go(id){
+  state.page = id;
+  document.querySelectorAll('.nav-item').forEach(a=>a.classList.toggle('active',a.dataset.page===id));
+  document.querySelectorAll('.page').forEach(s=>s.classList.toggle('active',s.id==='page-'+id));
+  const [t,s] = META[id];
+  document.getElementById('pageTitle').textContent = t;
+  /* Un sous-titre peut etre une FONCTION plutot qu'une chaine, et il
+     l'est des qu'il cite un montant. Un chiffre ecrit en clair dans le
+     fichier de navigation serait publie : ce fichier est versionne
+     dans un depot public, alors que le tableau de bord, lui, est
+     derriere une authentification. Calcule ici, le montant ne vit que
+     dans les donnees. */
+  document.getElementById('pageSub').textContent =
+    typeof s === 'function' ? s() : s;
+  const p = NAV.flatMap(g=>g.p).find(x=>x.id===id);
+  document.getElementById('filters').classList.toggle('off',!p.f);
+  document.getElementById('filterNote').textContent =
+    p.f ? '' : 'source sans date';
+  window.scrollTo({top:0});
+
+  // Le bandeau de chargement vit dans #content, partage par toutes les
+  // pages : sans cette ligne, celui d'une page qui telechargeait reste
+  // affiche sur la page suivante, qui elle n'attend rien.
+  bandeauChargement(false);
+
+  // Un message d'echec precedent doit disparaitre des qu'on retente :
+  // le laisser affiche au-dessus de graphiques revenus donnerait un
+  // ecran qui se contredit lui-meme.
+  document.querySelectorAll('.echec-chargement').forEach(e => e.remove());
+
+  // Les jeux lourds arrivent AVANT le rendu : afficher une page a moitie
+  // remplie puis la redessiner produit un clignotement desagreable.
+  const requis = (BESOINS[id] || []).filter(j => !DATA[j]);
+  if(requis.length){
+    bandeauChargement(true);
+    try{
+      await assurerJeux(id);
+    }catch(err){
+      bandeauChargement(false);
+      console.error('Chargement impossible', err);
+      const sec = document.getElementById('page-' + id);
+      if(sec) sec.insertAdjacentHTML('afterbegin',
+        '<div class="note crit echec-chargement"><div class="note-title">Données de cette page indisponibles</div>'
+        + 'Le fichier <code>' + requis.join(', ') + '</code> n\'a pas pu être chargé. '
+        + 'Les autres pages restent utilisables.'
+        + '<div style="margin-top:10px"><button class="btn primary" '
+        + 'onclick="go(\'' + id + '\')">Réessayer</button></div></div>');
+      return;
+    }
+    bandeauChargement(false);
+    // Le lecteur a pu naviguer ailleurs pendant le telechargement :
+    // on ne redessine pas par-dessus la page qu'il regarde maintenant.
+    if(state.page !== id) return;
+  }
+  render(id);
+}
+
+/* =====================================================================
+   FILTRE DE PERIODE
+   ===================================================================== */
+function initFilters(){
+  document.getElementById('d1').value = state.start;
+  document.getElementById('d2').value = state.end;
+  document.getElementById('d1').min = DATA.meta.periode_debut;
+  document.getElementById('d2').max = DATA.meta.periode_fin;
+  document.getElementById('apply').addEventListener('click',()=>{
+    const a = document.getElementById('d1').value, b = document.getElementById('d2').value;
+    if(!a||!b||a>b) return;
+    state.start=a; state.end=b; state.preset=null;
+    document.querySelectorAll('[data-preset]').forEach(x=>x.classList.remove('on'));
+    render(state.page);
+  });
+  document.querySelectorAll('[data-preset]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const p = b.dataset.preset;
+      state.end = DATA.meta.periode_fin;
+      if(p==='all'){ state.start = DATA.meta.periode_debut; }
+      else{
+        const d = dOf(state.end); d.setDate(d.getDate()-parseInt(p));
+        const min = DATA.meta.periode_debut;
+        state.start = d.toISOString().slice(0,10);
+        if(state.start < min) state.start = min;
+      }
+      state.preset = p;
+      document.querySelectorAll('[data-preset]').forEach(x=>x.classList.toggle('on',x===b));
+      document.getElementById('d1').value = state.start;
+      document.getElementById('d2').value = state.end;
+      render(state.page);
+    });
+  });
+}
+
+/* =====================================================================
+   BASCULE « voir les chiffres » — la vue tableau exigee par
+   l'accessibilite : l'identite d'une serie ne repose jamais sur la
+   couleur seule.
+   ===================================================================== */
+function initToggles(){
+  document.addEventListener('click',ev=>{
+    const b = ev.target.closest('.mini[data-toggle]');
+    if(!b) return;
+    const t = document.getElementById(b.dataset.toggle);
+    if(!t) return;
+    const on = t.classList.toggle('on');
+    b.textContent = on ? 'Masquer les chiffres' : 'Voir les chiffres';
+  });
+}
+
+/* Remonte du rendu de TABOO : le chassis l'appelle lui-meme dans
+   barHorizontale(), et AMNESIA mourait dessus. */
+/* Part de chaque barre dans le total du graphique. */
+const pctBarres = (axe, decimales) => ({
+  id: 'pct' + Math.random().toString(36).slice(2, 7),
+  afterDatasetsDraw(ch) {
+    const visibles = ch.data.datasets
+      .map((d, i) => ({d, i}))
+      .filter(({i}) => ch.isDatasetVisible(i));
+    // Le total se calcule sur les series AFFICHEES : masquer une serie
+    // via la legende doit recalculer les parts, sinon elles ne somment
+    // plus a 100 % et le lecteur ne comprend pas pourquoi.
+    let total = 0;
+    for (const {d} of visibles) {
+      for (const v of d.data) {
+        const x = Array.isArray(v) ? Math.abs(v[1] - v[0]) : Math.abs(v || 0);
+        total += x;
+      }
+    }
+    if (!total) return;
+
+    const ctx = ch.ctx;
+    ctx.save();
+    ctx.font = "600 10.5px 'Inter',sans-serif";
+    ctx.fillStyle = C.ink;
+    for (const {i} of visibles) {
+      const meta = ch.getDatasetMeta(i);
+      const data = ch.data.datasets[i].data;
+      meta.data.forEach((el, j) => {
+        const brut = data[j];
+        const v = Array.isArray(brut) ? Math.abs(brut[1] - brut[0]) : (brut || 0);
+        if (!v) return;
+        const pct = 100 * Math.abs(v) / total;
+        // Sous 1,5 %, la barre est trop courte : l'etiquette deborderait
+        // sur sa voisine et on ne saurait plus a laquelle elle se rapporte.
+        if (pct < 1.5) return;
+        const txt = (decimales === 0 ? F(pct) : F1(pct)) + ' %';
+        if (axe === 'y') {
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.fillText(txt, el.x + 7, el.y);
+        } else {
+          ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+          ctx.fillText(txt, el.x, el.y - 5);
+        }
+      });
+    }
+    ctx.restore();
+  },
+});
+
+/* ---------- Briques d'affichage, communes aux etablissements ----------
+   Elles vivaient dans le rendu de TABOO, ou AMNESIA ne pouvait pas les
+   atteindre : sa premiere page est morte sur « tuile is not defined ».
+   Une tuile de chiffre-cle, une pastille d'etat et une barre de
+   proportion n'appartiennent a aucun etablissement en particulier.
+   ---------------------------------------------------------------- */
+function avecPart(valeur, total, texte) {
+  return total ? `${texte} · ${F1(100 * valeur / total)} %` : texte;
+}
+
+/* ---------- fabriques de fragments reutilisables ---------- */
+function tuile(o){
+  return `<div class="stat ${o.cls||''}${o.hero?' hero':''}">
+    <div class="k">${o.k}</div>
+    <div class="v">${o.v}${o.u?`<span class="u">${o.u}</span>`:''}</div>
+    ${o.d?`<div class="d">${o.d}</div>`:''}</div>`;
+}
+function pill(txt, cls){ return `<span class="pill ${cls||''}"><i></i>${txt}</span>`; }
+function barCell(part, couleur){
+  const w = Math.max(0, Math.min(100, part));
+  return `<div class="bar"><i style="width:${w}%;background:${couleur}"></i></div>`;
+}
+
+function tableHTML(cols, rows){
+  let h = '<div class="tbl"><table><thead><tr>';
+  for(const c of cols) h += `<th class="${c.num?'num':''}">${c.t}</th>`;
+  h += '</tr></thead><tbody>';
+  for(const r of rows){
+    h += '<tr>';
+    for(let i=0;i<cols.length;i++) h += `<td class="${cols[i].num?'num':''}">${r[i]}</td>`;
+    h += '</tr>';
+  }
+  return h+'</tbody></table></div>';
+}
+
+/* =====================================================================
+   FILTRAGE DES TABLEAUX
+   ---------------------------------------------------------------------
+   Un catalogue de plusieurs centaines de lignes ne se lit pas, il se
+   cherche. Le filtre porte sur le texte de la ligne entiere : taper
+   « BURGER », « SMOKE » ou « LOYERS » suffit, sans avoir a choisir une
+   colonne au prealable.
+
+   Le filtrage se fait sur les lignes deja rendues, cote client : il n'y
+   a aucun aller-retour, donc la liste se reduit a la frappe.
+   ===================================================================== */
+function rendreFiltrable(idConteneur, exemple){
+  const hote = document.getElementById(idConteneur);
+  if(!hote || hote.dataset.filtrable === '1') return;
+  hote.dataset.filtrable = '1';
+
+  const barre = document.createElement('div');
+  barre.className = 'filtre-tbl';
+  barre.innerHTML = `
+    <input type="search" placeholder="${exemple || 'Filtrer…'}" spellcheck="false">
+    <span class="compte"></span>`;
+  hote.parentNode.insertBefore(barre, hote);
+
+  const champ = barre.querySelector('input');
+  const compte = barre.querySelector('.compte');
+
+  const appliquer = () => {
+    const q = champ.value.trim().toLowerCase();
+    const lignes = hote.querySelectorAll('tbody tr');
+    let visibles = 0;
+    lignes.forEach(tr => {
+      const ok = !q || tr.textContent.toLowerCase().includes(q);
+      tr.hidden = !ok;
+      if (ok) visibles++;
+    });
+    compte.textContent = q
+      ? `${visibles} sur ${lignes.length}`
+      : `${lignes.length} lignes`;
+    // Dire explicitement qu'un filtre ne renvoie rien : un tableau vide
+    // sans explication se lit comme un bug.
+    let vide = hote.querySelector('.aucun-resultat');
+    if (q && visibles === 0) {
+      if (!vide) {
+        vide = document.createElement('div');
+        vide.className = 'aucun-resultat';
+        hote.appendChild(vide);
+      }
+      vide.textContent = `Aucune ligne ne contient « ${champ.value.trim()} ».`;
+      vide.hidden = false;
+    } else if (vide) {
+      vide.hidden = true;
+    }
+  };
+
+  champ.addEventListener('input', appliquer);
+  champ.addEventListener('search', appliquer);
+  appliquer();
+}
+
+/* =====================================================================
+   CHARGEMENT PARESSEUX DES JEUX LOURDS
+   ---------------------------------------------------------------------
+   Mesure sur ce jeu de donnees : 90 % du poids sert UNE page chacun.
+     ventes_categorie_jour 1 853 Ko   Ventes
+     horaire_jour          1 817 Ko   Profil de la nuit
+     articles_mois           586 Ko   Explorer
+     offerts_jour            484 Ko   Remises & offerts
+     depenses_jour           443 Ko   Depenses
+   Les charger tous au demarrage, c'est faire attendre le lecteur pour
+   des ecrans qu'il n'ouvrira peut-etre jamais.
+
+   La Synthese et la page Qualite n'y figurent PAS : les deux chiffres
+   qu'elles y puisaient -- part de la nuit, valeur offerte -- sont
+   pre-agreges au grain jour dans le socle, et la volumetrie y est
+   stockee. La page d'accueil s'affiche donc sans aucun telechargement
+   supplementaire.
+   ===================================================================== */
+
+const chargements = {};   // promesses en cours, pour ne pas telecharger deux fois
+
+function urlJeu(nom){
+  /* window.TABOO_DONNEES est pose par le chargeur, qui connait deja le
+     dossier de l'etablissement. Recalculer la regle ici en ferait une
+     seconde source : le jour ou l'arborescence change, l'une des deux
+     serait corrigee et pas l'autre -- c'est exactement ce qui vient
+     d'arriver quand les donnees sont passees sous donnees/<code>/. */
+  const base = (window.TABOO_DONNEES || 'donnees').replace(/\/+$/, '');
+  return base + '/' + nom + '.json';
+}
+
+async function assurerJeux(page){
+  const requis = (BESOINS[page] || []).filter(j => !DATA[j]);
+  if(!requis.length) return;
+  await Promise.all(requis.map(nom => {
+    // Une page ouverte deux fois de suite ne doit pas relancer le
+    // telechargement : on memorise la PROMESSE, pas seulement le resultat.
+    if(!chargements[nom]){
+      chargements[nom] = fetch(urlJeu(nom), {cache:'default'})
+        .then(r => { if(!r.ok) throw new Error('HTTP ' + r.status + ' sur ' + nom);
+                     return r.json(); })
+        .then(j => { DATA[nom] = j; return j; })
+        .catch(err => { delete chargements[nom]; throw err; });
+    }
+    return chargements[nom];
+  }));
+}
+
+function bandeauChargement(actif){
+  let el = document.getElementById('chargement-jeu');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'chargement-jeu';
+    el.className = 'charge-jeu';
+    document.getElementById('content').prepend(el);
+  }
+  el.hidden = !actif;
+  if(actif) el.innerHTML =
+    '<span class="tourne"></span> Chargement des données de cette page…';
+}
+
+const RENDER = {};
+function render(id){
+  const f = RENDER[id];
+  if(!f) return;
+  try{
+    f();
+    // Les boutons d'export se posent APRES le rendu : les tableaux
+    // n'existent pas avant, et un tableau refait doit retrouver le sien.
+    if(typeof ajouterExports === 'function') ajouterExports();
+  }
+  catch(err){
+    // Un renderer qui echoue ne doit pas emporter tout le dashboard :
+    // la page concernee affiche l'erreur, les autres restent utilisables.
+    console.error('Erreur de rendu sur la page '+id, err);
+    const sec = document.getElementById('page-'+id);
+    if(sec) sec.insertAdjacentHTML('afterbegin',
+      `<div class="note crit"><div class="note-title">Erreur d'affichage sur cette page</div>
+       ${err.message} — les autres pages restent utilisables.</div>`);
+  }
+}
+
+/* =====================================================================
+   DEMARRAGE — appele par le chargeur une fois le socle recupere
+   ===================================================================== */
+function demarrer(){
+  state.start = DATA.meta.periode_debut;
+  state.end   = DATA.meta.periode_fin;
+  buildSidebar();
+  initMenu();
+  initFilters();
+  initToggles();
+  go('synthese');
+}
+</script>
+<script>
+/* =====================================================================
+   LE COIN DU COMPTE
+   ---------------------------------------------------------------------
+   Nomme la personne connectee, ouvre l'administration si elle y a
+   droit, et permet de fermer la session.
+
+   Ce bloc est volontairement independant du reste du tableau de bord :
+   il ne touche ni a DATA, ni a state, ni au chargeur. Si /api/session
+   ne repond pas -- fonction en panne, base injoignable -- la barre
+   reste vide et les graphiques s'affichent quand meme. L'inverse
+   serait absurde : une panne de l'annuaire des comptes n'a aucune
+   raison d'empecher de lire des chiffres deja autorises.
+
+   « role === 'admin' » ne decide rien ici. Le middleware refuse deja la
+   page aux autres et api/admin.js refuse l'action : ce test-ci se
+   contente de ne pas afficher un lien qui menerait a un refus.
+   ===================================================================== */
+/* Marquer l'onglet de l'etablissement courant.
+
+   POURQUOI CE N'EST PAS FAIT A LA CONSTRUCTION
+   --------------------------------------------
+   Deux traitements asynchrones courent en parallele : ce coin du compte,
+   qui interroge /api/session, et le chargeur, qui resout l'etablissement
+   a afficher. Rien ne dit lequel finit le premier.
+
+   La premiere version lisait window.TABOO_ETABLISSEMENT au moment de
+   construire les boutons. Resultat observe en production : les deux
+   onglets sans marque, parce que le chargeur n'avait pas encore ecrit
+   la valeur. Un defaut qui ne se voit pas en relisant le code -- il
+   depend de quelle reponse reseau arrive en premier.
+
+   La fonction est donc appelee des DEUX cotes : a la construction des
+   boutons, et sur l'evenement emis par le chargeur. Celui des deux qui
+   arrive en second trouve tout en place. */
+function marquerEtablissementActif(){
+  const courant = window.TABOO_ETABLISSEMENT;
+  if(!courant) return;
+  document.querySelectorAll('.choix-etab a').forEach(a => {
+    const actif = (a.dataset.code === courant);
+    a.classList.toggle('on', actif);
+    if(actif) a.setAttribute('aria-current','page');
+    else a.removeAttribute('aria-current');
+  });
+}
+document.addEventListener('etablissement-choisi', marquerEtablissementActif);
+
+(async function coinDuCompte(){
+  const barre = document.getElementById('compteBarre');
+  if(!barre) return;
+
+  let moi;
+  try{
+    const r = await fetch('/api/session', {credentials:'same-origin'});
+    if(!r.ok) return;
+    moi = await r.json();
+  }catch{ return; }
+
+  /* Le selecteur d'etablissement.
+
+     Il n'apparait qu'a partir de deux : proposer de « choisir » quand il
+     n'y a qu'une possibilite est du bruit. Sa presence repond aussi a
+     une question qui s'est posee -- « comment accede-t-on a l'autre ? »
+     -- dont la reponse etait, avant lui, « en tapant ?etab= dans
+     l'URL », ce qui ne se devine pas.
+
+     La liste vient de /api/session, donc du cookie signe : un
+     etablissement qu'on ne voit pas ici est un etablissement dont le
+     middleware refuserait les donnees. On n'affiche jamais un choix qui
+     finirait en 403. */
+  const ouverts = moi.etablissements || [];
+  if (ouverts.length > 1) {
+    const groupe = document.createElement('div');
+    groupe.className = 'choix-etab';
+    for (const e of ouverts) {
+      const lien = document.createElement('a');
+      lien.className = 'btn';
+      // Le chemin vient du serveur, pas d'une regle recopiee ici :
+      // chaque etablissement a sa propre coquille, et lib/etablissements.js
+      // est le seul endroit qui dise laquelle.
+      lien.href = e.chemin || '/';
+      lien.textContent = e.nom;
+      lien.title = e.sous_titre || '';
+      lien.dataset.code = e.code;
+      groupe.appendChild(lien);
+    }
+    barre.appendChild(groupe);
+    marquerEtablissementActif();
+  }
+
+  // textContent et non innerHTML : le nom vient de la base, ou il a ete
+  // saisi a la main. Un « <img onerror> » dans un nom d'utilisateur
+  // s'executerait ici.
+  const nom = document.createElement('span');
+  nom.className = 'nom';
+  nom.textContent = moi.nom || moi.identifiant;
+  barre.appendChild(nom);
+
+  // Ouvert a tout le monde : c'est la seule porte par laquelle un lecteur
+  // peut changer le mot de passe qu'on lui a attribue. Sans ce lien, il
+  // garderait a vie la suite de quatre mots tiree au sort pour lui.
+  const compte = document.createElement('a');
+  compte.className = 'btn';
+  compte.href = '/compte';
+  compte.textContent = 'Mon compte';
+  barre.appendChild(compte);
+
+  if(moi.role === 'admin'){
+    const lien = document.createElement('a');
+    lien.className = 'btn';
+    lien.href = '/admin';
+    lien.textContent = 'Administration';
+    barre.appendChild(lien);
+  }
+
+  const sortie = document.createElement('button');
+  sortie.className = 'btn';
+  sortie.type = 'button';
+  sortie.textContent = 'Déconnexion';
+  sortie.addEventListener('click', async ()=>{
+    sortie.disabled = true;
+    try{
+      await fetch('/api/session', {
+        method:'POST', credentials:'same-origin',
+        headers:{'content-type':'application/json'},
+        body: JSON.stringify({action:'deconnexion'}),
+      });
+    }catch{ /* le cookie expirera de toute facon */ }
+    // Rechargement plutot que redirection : le middleware repond alors
+    // le formulaire de connexion, sans cookie valide a presenter.
+    location.reload();
+  });
+  barre.appendChild(sortie);
+
+  barre.hidden = false;
+})();
+</script>
+<script>__TABOO_CHARGEMENT_JS__</script>
+</body>
+</html>

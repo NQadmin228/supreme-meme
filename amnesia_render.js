@@ -1,0 +1,1399 @@
+/* =====================================================================
+   AMNESIA — Fonctions de rendu
+   ---------------------------------------------------------------------
+   Une fonction par page, enregistree dans RENDER. Le chassis (gabarit
+   partage avec TABOO) fournit tout le reste : formatage, graphiques,
+   tableaux, filtres, export Excel.
+
+   CE QUI N'EST PAS ICI, ET NE PEUT PAS L'ETRE
+   -------------------------------------------
+   Aucune marge, aucun cout matiere, aucun resultat. Les exports Infogest
+   ne portent pas de prix d'achat. On ne les estime pas : un coefficient
+   invente produirait une marge d'apparence credible que personne ne
+   pourrait contredire, et elle finirait dans une decision.
+
+   LES TYPES D'ARTICLES
+   --------------------
+   BOISSON / PLAT / SMOKE chez AMNESIA, contre DRINK / EAT / SMOKE chez
+   TABOO. Les couleurs de serie, elles, ne changent pas : elles designent
+   une nature de produit, pas une marque. Une boisson doit avoir la meme
+   couleur sur les deux tableaux de bord.
+   ===================================================================== */
+
+/* Correspondance vers les couleurs du chassis. C[...] est defini dans le
+   gabarit avec ses contrastes verifies ; on n'invente pas de teinte
+   ici. */
+const TYPES = ['BOISSON', 'PLAT', 'SMOKE'];
+const COULEUR_TYPE = {BOISSON: 'DRINK', PLAT: 'EAT', SMOKE: 'SMOKE'};
+const cType = t => C[COULEUR_TYPE[t] || 'DRINK'];
+
+/* Les jours d'AMNESIA portent brut / remise / net / offerts_valeur. */
+const KEYS_JOUR = ['brut', 'remise', 'net', 'offerts_valeur', 'offerts_qte'];
+
+function joursPeriode(){ return inRange(DATA.resultat_jour, state.start, state.end); }
+
+/* Les jeux lourds ne sont pas dans le socle : cette fonction est celle
+   du chassis, appelee par les pages qui en ont besoin. */
+function detailPeriode(){
+  return inRange(DATA.detail_jour || [], state.start, state.end);
+}
+function offertsPeriode(){
+  return inRange(DATA.offerts_jour || [], state.start, state.end);
+}
+
+/* Un encart de constat, dans le ton des « notes » de TABOO. Le libelle
+   de gravite est ecrit, jamais porte par la seule couleur. */
+function constat(niveau, titre, corps){
+  const mot = {crit: 'CRITIQUE', warn: 'VIGILANCE', good: 'FAVORABLE'}[niveau] || '';
+  return `<div class="note ${niveau}" style="margin-bottom:14px">
+    <div class="note-title">${pill(mot, niveau)} ${titre}</div>${corps}</div>`;
+}
+
+/* =====================================================================
+   PAGE 1 — SYNTHESE
+   ===================================================================== */
+
+RENDER['synthese'] = function(){
+  const j = joursPeriode();
+  const t = sums(j, KEYS_JOUR);
+  const potentiel = t.net + t.offerts_valeur;
+  const paniers = DATA.totaux.paniers;
+
+  document.getElementById('sy-kpi').innerHTML = [
+    tuile({k:"CHIFFRE D'AFFAIRES NET", v:Fc(t.net), u:'F', hero:true, cls:'accent',
+           d:F(t.net)+' F exactement · '+F(j.length)+' nuits'}),
+    tuile({k:'VALEUR OFFERTE', v:Fc(t.offerts_valeur), u:'F', cls:'crit',
+           d:F1(PCT(t.offerts_valeur, t.net))+' % du CA net'}),
+    tuile({k:'CHIFFRE POTENTIEL', v:Fc(potentiel), u:'F',
+           d:'si rien n\'avait été offert'}),
+    tuile({k:'PANIER MOYEN', v:F(paniers ? DATA.totaux.ca_net/paniers : 0), u:'F',
+           d:F(paniers)+' paniers sur la période complète'}),
+  ].join('');
+
+  /* Le constat d'ouverture. Ce n'est pas un commentaire decoratif : sur
+     ce jeu de donnees, un article sur deux sort sans etre paye, et c'est
+     le premier fait que la direction doit lire. */
+  const partQte = PCT(DATA.totaux.offerts_qte, DATA.totaux.qte_totale);
+  document.getElementById('sy-constat').innerHTML = constat('crit',
+    'Quatre articles sur dix sortent sans être payés',
+    `Sur la période complète, <b>${F(DATA.totaux.offerts_qte)} articles</b> ont été
+     offerts sur ${F(DATA.totaux.qte_totale)} sortis, soit <b>${F1(partQte)} %</b>.
+     En valeur de vente : <b>${F(DATA.totaux.offerts_valeur)} F</b> contre
+     ${F(DATA.totaux.ca_net)} F encaissés, soit
+     <b>${F1(PCT(DATA.totaux.offerts_valeur, DATA.totaux.ca_net))} %</b> du chiffre
+     d'affaires net.
+     <br><br>Un établissement de nuit offre — tournées, fidélisation, gestes
+     commerciaux. La question n'est pas de savoir s'il faut offrir, mais si ce
+     niveau-là est voulu et suivi. Voir « Articles offerts » pour le détail par
+     article, par caissier et par ticket.`);
+
+  /* --- CA net et valeur offerte, meme echelle --- */
+  setChart('c-sy-serie', {type:'line',
+    data:{labels:j.map(r=>r.d), datasets:[
+      Object.assign({}, LINE, {label:'CA net', data:j.map(r=>r.net),
+        borderColor:C.accentMark, backgroundColor:'rgba(15,163,191,.14)', fill:true}),
+      Object.assign({}, LINE, {label:'Valeur offerte', data:j.map(r=>r.offerts_valeur),
+        borderColor:C.crit, backgroundColor:'rgba(208,59,59,.12)', fill:true}),
+    ]},
+    options:{interaction:{mode:'index',intersect:false},
+      plugins:{legend:legendTop(true), tooltip:Object.assign({},TOOLTIP,{callbacks:{
+        label:c=>' '+c.dataset.label+' : '+FCFA(c.parsed.y),
+        footer:items=>{
+          const net = items.find(i=>i.dataset.label==='CA net')?.parsed.y || 0;
+          const off = items.find(i=>i.dataset.label==='Valeur offerte')?.parsed.y || 0;
+          return net ? 'Offert : '+F1(PCT(off,net))+' % du CA de la nuit' : '';
+        }}})},
+      scales:{y:axisY(), x:axisX()}}});
+
+  document.getElementById('sy-serie-t').innerHTML = tableHTML(
+    [{t:'Nuit'},{t:'CA net',num:true},{t:'Offert',num:true},{t:'% du CA',num:true}],
+    j.map(r=>[dateLabel(r.d), F(r.net), F(r.offerts_valeur),
+              F1(PCT(r.offerts_valeur, r.net))+' %']));
+
+  /* --- repartition par type --- */
+  const det = detailPeriode();
+  const parType = TYPES.map(ty => ({
+    t: ty, net: sum(det.filter(r=>r.type===ty), 'net')}));
+  const totType = parType.reduce((a,b)=>a+b.net, 0);
+  setChart('c-sy-type', {type:'doughnut',
+    data:{labels:parType.map(p=>p.t),
+      datasets:[{data:parType.map(p=>p.net),
+        backgroundColor:parType.map(p=>cType(p.t)),
+        borderColor:C.surface, borderWidth:3}]},
+    options:{cutout:'58%', plugins:{legend:legendTop(true),
+      tooltip:Object.assign({},TOOLTIP,{callbacks:{
+        label:c=>' '+c.label+' : '+FCFA(c.parsed)
+                 +'  ('+F1(PCT(c.parsed,totType))+' %)'}})}}});
+
+  /* --- dix premieres categories --- */
+  const cats = [...DATA.ventes_categorie].slice(0, 10);
+  barHorizontale('c-sy-cat', cats.map(c=>c.categorie), cats.map(c=>c.net),
+                 C.accentMark, FCFA, 'CA net');
+
+  /* --- ce que ce tableau de bord ne peut pas dire ---
+     Le detail des recoupements a demenage sur la page « Ecarts &
+     controles », qui rassemble ceux des trois sources. Ce qui reste ici
+     est ce qui ne se recoupe pas mais se CONSTATE : une donnee absente
+     des exports, et un renvoi chiffre vers le reste. Deux listes du
+     meme sujet divergent des que l'une est modifiee. */
+  const nbEcarts = anomalies().length;
+  document.getElementById('sy-limites').innerHTML = `
+    <div style="margin-bottom:16px">
+      <b style="color:var(--st-crit)">Aucun prix d'achat par article.</b>
+      ${DATA.meta.pourquoi_pas_de_couts}
+    </div>
+    <div style="margin-bottom:16px">
+      <b>${nb(nbEcarts, 'écart entre les sources', 'écarts entre les sources')}.</b>
+      Trois sources mesurent cet établissement — la caisse, le classeur tenu par
+      l'exploitation, et le résumé que le logiciel s'annonce à lui-même — et elles
+      ne concordent pas. Chacun de ces écarts est chiffré et expliqué sur la page
+      <a href="#" onclick="go('ecarts');return false;"><b>Écarts &amp; contrôles</b></a>,
+      à lire avant de citer un montant hors de ce tableau de bord.
+    </div>
+    <div class="foot">
+      Période couverte : ${dateLabel(DATA.meta.periode_debut)} →
+      ${dateLabel(DATA.meta.periode_fin)}, soit
+      ${F(DATA.meta.jours_exploitation)} nuits d'ouverture.
+      Source : ${DATA.meta.source}.</div>`;
+};
+
+/* =====================================================================
+   PAGE 2 — ARTICLES OFFERTS
+   ===================================================================== */
+
+RENDER['offerts'] = function(){
+  const j = joursPeriode();
+  const off = offertsPeriode();
+  const t = sums(j, KEYS_JOUR);
+
+  const tickets = new Set(off.map(o=>o.ticket)).size;
+  const parCaissier = groupBy(off, o=>o.caissier, ['valeur','qte']);
+
+  document.getElementById('of-kpi').innerHTML = [
+    tuile({k:'VALEUR OFFERTE', v:Fc(t.offerts_valeur), u:'F', hero:true, cls:'crit',
+           d:F(t.offerts_valeur)+' F exactement'}),
+    tuile({k:'ARTICLES OFFERTS', v:F(t.offerts_qte),
+           d:F1(PCT(DATA.totaux.offerts_qte, DATA.totaux.qte_totale))+' % des articles sortis'}),
+    tuile({k:'TICKETS CONCERNÉS', v:F(tickets),
+           d:'sur '+F(DATA.totaux.paniers)+' paniers'}),
+    tuile({k:'OFFERT PAR TICKET CONCERNÉ', v:F(tickets ? t.offerts_valeur/tickets : 0), u:'F',
+           d:'valeur moyenne donnée quand il y a un geste'}),
+  ].join('');
+
+  /* Le rapport offert/encaisse par caissier : c'est lui qui parle, pas
+     le montant brut. Celui qui encaisse le plus offre mecaniquement le
+     plus. */
+  const caissiers = (DATA.caissiers || []).filter(c=>c.net > 0);
+  const offCais = new Map((DATA.offerts_caissier||[]).map(o=>[o.caissier, o]));
+  const compares = caissiers.map(c => {
+    const o = offCais.get(c.nom) || {valeur:0, qte:0, tickets:0};
+    return {nom:c.nom, net:c.net, tickets:c.tickets, offert:o.valeur,
+            qte:o.qte, tkOff:o.tickets, ratio:c.net ? o.valeur/c.net : 0};
+  }).sort((a,b)=>b.ratio-a.ratio);
+
+  /* Comparer deux taux calculés sur des volumes incomparables ne veut
+     rien dire. Sur ce jeu, un caissier réalise 96,8 % du chiffre et un
+     autre a vingt-et-un tickets : rapprocher leurs pourcentages
+     produirait une phrase saisissante et fausse.
+
+     On ne retient donc dans la comparaison que ceux qui pèsent au moins
+     5 % du chiffre — et quand il n'en reste qu'un, on le dit au lieu de
+     fabriquer un écart. */
+  const SEUIL_COMPARAISON = 0.05;
+  const significatifs = compares.filter(
+    c => c.net >= SEUIL_COMPARAISON * DATA.totaux.ca_net);
+  const dominant = compares[0] && compares.find(
+    c => c.net >= 0.8 * DATA.totaux.ca_net);
+
+  document.getElementById('of-constat').innerHTML = (
+    significatifs.length < 2
+      ? constat('warn', "L'activité est concentrée sur un seul poste",
+          dominant
+            ? `${dominant.nom} réalise
+               <b>${F1(PCT(dominant.net, DATA.totaux.ca_net))} %</b> du chiffre et
+               offre <b>${F1(dominant.ratio*100)} %</b> de ce qu'il encaisse.
+               <br><br>Aucun autre caissier n'a un volume comparable — le suivant
+               pèse ${F1(PCT((significatifs[1]||compares[1]||{net:0}).net,
+               DATA.totaux.ca_net))} % du chiffre. Rapprocher leurs pourcentages
+               produirait un écart spectaculaire et sans portée : un taux calculé
+               sur vingt tickets ne se compare pas à un taux calculé sur cinq
+               mille. Le tableau ci-dessous donne les volumes en regard ; la
+               comparaison deviendra lisible quand plusieurs postes seront
+               réellement actifs.`
+            : `Aucun caissier ne pèse assez pour qu'une comparaison de taux ait
+               un sens sur cette période.`)
+      : constat('warn', "Le taux d'offert varie d'un caissier à l'autre",
+          `${significatifs[0].nom} offre
+           <b>${F1(significatifs[0].ratio*100)} %</b> de ce qu'il encaisse ;
+           ${significatifs[significatifs.length-1].nom},
+           <b>${F1(significatifs[significatifs.length-1].ratio*100)} %</b>.
+           <br><br>Comparaison limitée aux caissiers réalisant au moins
+           ${F(SEUIL_COMPARAISON*100)} % du chiffre : un taux calculé sur quelques
+           tickets ne se compare pas à un taux calculé sur plusieurs milliers.
+           Le tableau ci-dessous donne tous les postes, volumes en regard.`));
+
+  /* --- valeur offerte par nuit, avec la part en second axe --- */
+  setChart('c-of-jour', {type:'bar',
+    data:{labels:j.map(r=>r.d), datasets:[
+      Object.assign({}, BAR, {label:'Valeur offerte', data:j.map(r=>r.offerts_valeur),
+        backgroundColor:C.crit, yAxisID:'y'}),
+      Object.assign({}, LINE, {label:'Part du CA de la nuit', type:'line',
+        data:j.map(r=>r.net ? 100*r.offerts_valeur/r.net : 0),
+        borderColor:C.accent, yAxisID:'y1', fill:false}),
+    ]},
+    options:{interaction:{mode:'index',intersect:false},
+      plugins:{legend:legendTop(true), tooltip:Object.assign({},TOOLTIP,{callbacks:{
+        label:c=>c.dataset.yAxisID==='y1'
+          ? ' Part : '+F1(c.parsed.y)+' %'
+          : ' Offert : '+FCFA(c.parsed.y)}})},
+      scales:{y:axisY(), x:axisX(),
+        y1:Object.assign(axisY(v=>F(v)+' %'),
+          {position:'right', grid:{drawOnChartArea:false}})}}});
+
+  document.getElementById('of-jour-t').innerHTML = tableHTML(
+    [{t:'Nuit'},{t:'Offert',num:true},{t:'Articles',num:true},
+     {t:'CA net',num:true},{t:'% du CA',num:true}],
+    j.map(r=>[dateLabel(r.d), F(r.offerts_valeur), F(r.offerts_qte), F(r.net),
+              F1(PCT(r.offerts_valeur, r.net))+' %']));
+
+  /* --- articles et categories les plus offerts --- */
+  const parArticle = [...groupBy(off, o=>o.article, ['valeur','qte']).entries()]
+    .map(([k,v])=>({k, ...v})).sort((a,b)=>b.valeur-a.valeur).slice(0,15);
+  barHorizontale('c-of-article', parArticle.map(a=>a.k),
+                 parArticle.map(a=>a.valeur), C.crit, FCFA, 'Valeur offerte');
+
+  const parCat = [...groupBy(off, o=>o.categorie, ['valeur','qte']).entries()]
+    .map(([k,v])=>({k, ...v})).sort((a,b)=>b.valeur-a.valeur).slice(0,15);
+  barHorizontale('c-of-categorie', parCat.map(a=>a.k),
+                 parCat.map(a=>a.valeur), C.seq[4], FCFA, 'Valeur offerte');
+
+  /* --- par caissier --- */
+  const maxRatio = Math.max(...compares.map(c=>c.ratio), 0.0001);
+  document.getElementById('of-caissier').innerHTML = tableHTML(
+    [{t:'Caissier'},{t:'CA réalisé',num:true},{t:'Tickets',num:true},
+     {t:'Valeur offerte',num:true},{t:'Articles offerts',num:true},
+     {t:'Offert / encaissé',num:true},{t:''}],
+    compares.map(c=>[
+      c.nom, F(c.net), F(c.tickets), F(c.offert), F(c.qte),
+      F1(c.ratio*100)+' %',
+      barCell(100*c.ratio/maxRatio, c.ratio>0.2 ? C.crit : C.accentMark),
+    ]));
+
+  /* --- le detail, filtrable --- */
+  const lignes = [...off].sort((a,b)=>b.valeur-a.valeur || a.d.localeCompare(b.d));
+  document.getElementById('of-detail').innerHTML = tableHTML(
+    [{t:'Nuit'},{t:'Catégorie'},{t:'Article'},{t:'Caissier'},
+     {t:'Ticket',num:true},{t:'Qté',num:true},{t:'Valeur',num:true}],
+    lignes.map(o=>[dateLabel(o.d), o.categorie, o.article, o.caissier,
+                   o.ticket, F(o.qte), F(o.valeur)]));
+  rendreFiltrable('of-detail', 'Filtrer : un article, un caissier, une date…');
+};
+
+/* =====================================================================
+   PAGE 3 — CHIFFRE D'AFFAIRES
+   ===================================================================== */
+
+RENDER['ventes'] = function(){
+  const j = joursPeriode();
+  const t = sums(j, KEYS_JOUR);
+  const nuits = j.length;
+
+  const meilleure = j.reduce((a,b)=>(b.net>(a?.net??-1)?b:a), null);
+
+  document.getElementById('ve-kpi').innerHTML = [
+    tuile({k:"CA NET DE LA PÉRIODE", v:Fc(t.net), u:'F', hero:true, cls:'accent',
+           d:F(t.net)+' F sur '+F(nuits)+' nuits'}),
+    tuile({k:'MOYENNE PAR NUIT', v:F(nuits ? t.net/nuits : 0), u:'F',
+           d:"moyenne sur les nuits d'ouverture, pas sur le calendrier"}),
+    tuile({k:'REMISES ACCORDÉES', v:Fc(t.remise), u:'F',
+           d:F1(PCT(t.remise, t.brut))+' % du chiffre brut'}),
+    tuile({k:'MEILLEURE NUIT', v:meilleure?Fc(meilleure.net):'—', u:'F',
+           d:meilleure?dateLabel(meilleure.d):''}),
+  ].join('');
+
+  setChart('c-ve-jour', {type:'bar',
+    data:{labels:j.map(r=>r.d), datasets:[Object.assign({}, BAR, {
+      label:'CA net', data:j.map(r=>r.net), backgroundColor:C.accentMark})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' CA net : '+FCFA(c.parsed.y)}})},
+      scales:{y:axisY(), x:axisX()}}});
+
+  document.getElementById('ve-jour-t').innerHTML = tableHTML(
+    [{t:'Nuit'},{t:'Brut',num:true},{t:'Remises',num:true},{t:'Net',num:true}],
+    j.map(r=>[dateLabel(r.d), F(r.brut), F(r.remise), F(r.net)]));
+
+  /* --- par mois --- */
+  const mois = parMoisJours(j);
+  setChart('c-ve-mois', {type:'bar',
+    data:{labels:mois.map(m=>m.libelle), datasets:[
+      Object.assign({}, BAR, {label:'CA net', data:mois.map(m=>m.net),
+        backgroundColor:C.accentMark, yAxisID:'y'}),
+      Object.assign({}, LINE, {label:"Nuits d'ouverture", type:'line',
+        data:mois.map(m=>m.nuits), borderColor:C.compare, yAxisID:'y1', fill:false}),
+    ]},
+    options:{interaction:{mode:'index',intersect:false},
+      plugins:{legend:legendTop(true), tooltip:Object.assign({},TOOLTIP,{callbacks:{
+        label:c=>c.dataset.yAxisID==='y1'
+          ? ' '+F(c.parsed.y)+' nuits' : ' CA net : '+FCFA(c.parsed.y)}})},
+      scales:{y:axisY(), x:axisX(),
+        y1:Object.assign(axisY(v=>F(v)),
+          {position:'right', grid:{drawOnChartArea:false}})}}});
+
+  /* --- par jour de la semaine, en MOYENNE par nuit ouverte --- */
+  const sem = JOURS.map((nom,i)=>{
+    const lignes = j.filter(r=>jourNum(r.d)===i);
+    const net = sum(lignes,'net');
+    return {nom, net, nuits:lignes.length, moy: lignes.length ? net/lignes.length : 0};
+  });
+  setChart('c-ve-semaine', {type:'bar',
+    data:{labels:sem.map(s=>s.nom), datasets:[Object.assign({}, BAR, {
+      label:'CA net moyen', data:sem.map(s=>s.moy), backgroundColor:C.seq[5]})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+FCFA(c.parsed.y)+' en moyenne',
+          footer:items=>{const s=sem[items[0].dataIndex];
+            return s.nuits+' nuit'+(s.nuits>1?'s':'')+' — '+FCFA(s.net)+' au total';}}})},
+      scales:{y:axisY(), x:axisX()}}});
+
+  document.getElementById('ve-detail').innerHTML = tableHTML(
+    [{t:'Nuit'},{t:'Brut',num:true},{t:'Remises',num:true},{t:'Net',num:true},
+     {t:'Articles offerts',num:true},{t:'Valeur offerte',num:true}],
+    j.map(r=>[dateLabel(r.d), F(r.brut), F(r.remise), F(r.net),
+              F(r.offerts_qte), F(r.offerts_valeur)]));
+  rendreFiltrable('ve-detail', 'Filtrer : une date, un montant…');
+};
+
+/* Regroupement mensuel propre a AMNESIA : on compte aussi les nuits,
+   que parMois() du chassis ne connait pas. */
+function parMoisJours(lignes){
+  const m = new Map();
+  for(const r of lignes){
+    const k = moisKey(r.d);
+    if(!m.has(k)) m.set(k, {cle:k, libelle:moisLabel(r.d), net:0, nuits:0});
+    const e = m.get(k);
+    e.net += r.net; e.nuits += 1;
+  }
+  return [...m.values()].sort((a,b)=>a.cle.localeCompare(b.cle));
+}
+
+/* =====================================================================
+   PAGE 4 — CATEGORIES & PRODUITS
+   ---------------------------------------------------------------------
+   Meme principe que l'exploration de TABOO : type -> categorie ->
+   produit. Trois niveaux, un fil d'Ariane, un clic pour descendre.
+   ===================================================================== */
+
+RENDER['explorer'] = function(){
+  const det = detailPeriode();
+  const e = state.explo;
+
+  let lignes, titre, sousTitre, colonne;
+  if(!e.t){
+    lignes = TYPES.map(ty=>{
+      const l = det.filter(r=>r.type===ty);
+      return {cle:ty, net:sum(l,'net'), qte:sum(l,'qte_vendue'),
+              offert:sum(l,'qte_offerte'), couleur:cType(ty)};
+    }).filter(x=>x.net>0 || x.qte>0);
+    titre = "Par type d'article";
+    sousTitre = "Cliquer un type pour voir ses catégories.";
+    colonne = "Type";
+  } else if(!e.c){
+    const l0 = det.filter(r=>r.type===e.t);
+    const m = groupBy(l0, r=>r.categorie, ['net','qte_vendue','qte_offerte']);
+    lignes = [...m.entries()].map(([k,v])=>({cle:k, net:v.net, qte:v.qte_vendue,
+      offert:v.qte_offerte, couleur:cType(e.t)})).sort((a,b)=>b.net-a.net);
+    titre = 'Catégories de ' + e.t;
+    sousTitre = "Cliquer une catégorie pour voir ses produits.";
+    colonne = 'Catégorie';
+  } else {
+    const l0 = det.filter(r=>r.type===e.t && r.categorie===e.c);
+    const m = groupBy(l0, r=>r.produit, ['net','qte_vendue','qte_offerte']);
+    lignes = [...m.entries()].map(([k,v])=>({cle:k, net:v.net, qte:v.qte_vendue,
+      offert:v.qte_offerte, couleur:cType(e.t)})).sort((a,b)=>b.net-a.net);
+    titre = 'Produits — ' + e.c;
+    sousTitre = "Dernier niveau.";
+    colonne = 'Produit';
+  }
+
+  const total = lignes.reduce((a,b)=>a+b.net, 0);
+  document.getElementById('ex-titre').textContent = titre;
+  document.getElementById('ex-sub').textContent = sousTitre;
+
+  /* Fil d'Ariane : on doit toujours pouvoir remonter, et savoir ou l'on
+     est. Une exploration sans retour est un piege. */
+  const fil = ['<button class="mini" data-explo="racine">Tous les types</button>'];
+  if(e.t) fil.push(`<button class="mini" data-explo="type">${e.t}</button>`);
+  if(e.c) fil.push(`<span class="mini" style="opacity:.6">${e.c}</span>`);
+  document.getElementById('ex-fil').innerHTML = fil.join(' › ');
+
+  const top = lignes.slice(0, 18);
+  setChart('c-ex', {type:'bar',
+    data:{labels:top.map(l=>l.cle), datasets:[Object.assign({}, BAR, {
+      label:'CA net', data:top.map(l=>l.net),
+      backgroundColor:top.map(l=>l.couleur)})]},
+    options:{indexAxis:'y',
+      plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+FCFA(c.parsed.x)
+                            +'  ('+F1(PCT(c.parsed.x,total))+' %)'}})},
+      scales:{x:axisY(), y:axisX({ticks:{color:C.dim, font:{size:11}}})}}});
+
+  document.getElementById('ex-table-titre').textContent = titre;
+  const maxNet = Math.max(...lignes.map(l=>l.net), 1);
+  document.getElementById('ex-table').innerHTML = tableHTML(
+    [{t:colonne},{t:'CA net',num:true},{t:'% du niveau',num:true},
+     {t:'Vendus',num:true},{t:'Offerts',num:true},{t:'% offerts',num:true},{t:''}],
+    lignes.map(l=>{
+      const qTot = l.qte + l.offert;
+      const cible = !e.t ? `data-descendre="${l.cle}"` :
+                    !e.c ? `data-descendre="${l.cle}"` : '';
+      return [
+        cible ? `<a ${cible} style="cursor:pointer;color:var(--accent)">${l.cle}</a>` : l.cle,
+        F(l.net), F1(PCT(l.net,total))+' %', F(l.qte), F(l.offert),
+        qTot ? F1(PCT(l.offert,qTot))+' %' : '—',
+        barCell(100*l.net/maxNet, l.couleur),
+      ];
+    }));
+  rendreFiltrable('ex-table', 'Filtrer…');
+};
+
+/* Navigation de l'exploration. Delegation posee une seule fois : la
+   reposer a chaque rendu empilerait les gestionnaires, et un clic
+   finirait par descendre de trois niveaux d'un coup. */
+if(!window.__amnesiaExploCable){
+  window.__amnesiaExploCable = true;
+  document.addEventListener('click', ev=>{
+    const b = ev.target.closest('[data-explo]');
+    if(b){
+      if(b.dataset.explo === 'racine') state.explo = {t:null, c:null};
+      else if(b.dataset.explo === 'type') state.explo = {t:state.explo.t, c:null};
+      RENDER['explorer'](); ajouterExports(); return;
+    }
+    const d = ev.target.closest('[data-descendre]');
+    if(d && document.getElementById('page-explorer')?.classList.contains('active')){
+      const v = d.dataset.descendre;
+      if(!state.explo.t) state.explo = {t:v, c:null};
+      else if(!state.explo.c) state.explo = {t:state.explo.t, c:v};
+      RENDER['explorer'](); ajouterExports();
+    }
+  });
+}
+
+/* =====================================================================
+   PAGE 5 — TRANCHES HORAIRES
+   ---------------------------------------------------------------------
+   Source cumulee sans date : le filtre de periode est masque pour cette
+   page (f:false dans NAV) et la page le redit elle-meme.
+   ===================================================================== */
+
+RENDER['horaires'] = function(){
+  const h = [...DATA.horaire].sort((a,b)=>ordreNuit(a.heure)-ordreNuit(b.heure));
+  const tot = sum(h, 'ca');
+  const nuit = sum(h.filter(r=>r.heure>=22 || r.heure<6), 'ca');
+  const forte = h.reduce((a,b)=>(b.ca>(a?.ca??-1)?b:a), null);
+  const totVentes = sum(h, 'ventes');
+
+  document.getElementById('ho-kpi').innerHTML = [
+    tuile({k:'PART DU CA ENTRE 22H ET 6H', v:F1(PCT(nuit,tot)), u:'%', cls:'accent',
+           d:'la nuit fait le chiffre, pas la soirée'}),
+    tuile({k:'TRANCHE LA PLUS FORTE', v:forte?forte.libelle:'—',
+           d:forte?FCFA(forte.ca)+' cumulés':''}),
+    tuile({k:'VENTES ENREGISTRÉES', v:F(totVentes),
+           d:'sur la période complète'}),
+    tuile({k:'PANIER MOYEN GLOBAL', v:F(totVentes ? tot/totVentes : 0), u:'F',
+           d:'toutes tranches confondues'}),
+  ].join('');
+
+  setChart('c-ho-ca', {type:'bar',
+    data:{labels:h.map(r=>r.libelle), datasets:[Object.assign({}, BAR, {
+      label:'CA', data:h.map(r=>r.ca), backgroundColor:C.accentMark})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+FCFA(c.parsed.y)
+                            +'  ('+F1(PCT(c.parsed.y,tot))+' % du CA)'}})},
+      scales:{y:axisY(), x:axisX({ticks:{color:C.faint, font:{size:9.5},
+                                          maxRotation:60, minRotation:60}})}}});
+
+  document.getElementById('ho-t').innerHTML = tableHTML(
+    [{t:'Tranche'},{t:'CA',num:true},{t:'% du CA',num:true},{t:'Ventes',num:true},
+     {t:'Vendeurs',num:true},{t:'Panier moyen',num:true}],
+    h.map(r=>[r.libelle, F(r.ca), F1(PCT(r.ca,tot))+' %', F(r.ventes),
+              F(r.vendeurs), F(r.panier_moyen)]));
+
+  setChart('c-ho-panier', {type:'line',
+    data:{labels:h.map(r=>r.libelle), datasets:[Object.assign({}, LINE, {
+      label:'Panier moyen', data:h.map(r=>r.panier_moyen),
+      borderColor:C.accent, backgroundColor:'rgba(234,206,101,.14)', fill:true})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' Panier moyen : '+FCFA(c.parsed.y)}})},
+      scales:{y:axisY(), x:axisX({ticks:{color:C.faint, font:{size:9.5},
+                                          maxRotation:60, minRotation:60}})}}});
+
+  setChart('c-ho-ventes', {type:'bar',
+    data:{labels:h.map(r=>r.libelle), datasets:[Object.assign({}, BAR, {
+      label:'Ventes', data:h.map(r=>r.ventes),
+      backgroundColor:C.seq[4], maxBarThickness:20})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+F(c.parsed.y)+' ventes'}})},
+      scales:{y:axisY(v=>F(v)), x:axisX({ticks:{color:C.faint, font:{size:9.5},
+                                                 maxRotation:60, minRotation:60}})}}});
+
+  document.getElementById('ho-note').textContent =
+    "Ce profil vient d'un export cumulé qui ne porte aucune date : il couvre "
+    + "toute la période et ne réagit pas au filtre, qui est masqué sur cette page "
+    + "plutôt que de laisser croire qu'il a été pris en compte.";
+};
+
+/* Ordre de la nuit : 14h en premier, 13h en dernier. Sans cela, minuit
+   coupe la soiree en deux et le pic se lit aux deux bouts du graphique. */
+function ordreNuit(h){ return (h + 10) % 24; }
+
+/* =====================================================================
+   PAGE 6 — CAISSIERS
+   ===================================================================== */
+
+RENDER['caissiers'] = function(){
+  const actifs = (DATA.caissiers || []).filter(c=>c.tickets > 0)
+    .sort((a,b)=>b.net-a.net);
+  const totCA = actifs.reduce((a,b)=>a+b.net, 0);
+  const totTk = actifs.reduce((a,b)=>a+b.tickets, 0);
+  const offCais = new Map((DATA.offerts_caissier||[]).map(o=>[o.caissier, o]));
+
+  const premier = actifs[0];
+  document.getElementById('ca-kpi').innerHTML = [
+    tuile({k:'CAISSIERS ACTIFS', v:F(actifs.length),
+           d:'sur '+F((DATA.caissiers||[]).length)+' comptes déclarés'}),
+    tuile({k:'TICKETS ENREGISTRÉS', v:F(totTk),
+           d:'sur toute la période'}),
+    tuile({k:'LE PLUS ACTIF', v:premier?premier.nom:'—',
+           d:premier?F1(PCT(premier.net,totCA))+' % du chiffre':''}),
+    tuile({k:'PANIER MOYEN', v:F(totTk ? totCA/totTk : 0), u:'F',
+           d:'tous caissiers confondus'}),
+  ].join('');
+
+  setChart('c-ca-ca', {type:'bar',
+    data:{labels:actifs.map(c=>c.nom), datasets:[Object.assign({}, BAR, {
+      label:'CA réalisé', data:actifs.map(c=>c.net), backgroundColor:C.accentMark})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+FCFA(c.parsed.y)
+                            +'  ('+F1(PCT(c.parsed.y,totCA))+' %)'}})},
+      scales:{y:axisY(), x:axisX()}}});
+
+  const maxCA = Math.max(...actifs.map(c=>c.net), 1);
+  document.getElementById('ca-table').innerHTML = tableHTML(
+    [{t:'Caissier'},{t:'Tickets',num:true},{t:'Articles',num:true},
+     {t:'CA réalisé',num:true},{t:'% du CA',num:true},{t:'Panier moyen',num:true},
+     {t:'Valeur offerte',num:true},{t:'Offert / encaissé',num:true},{t:''}],
+    actifs.map(c=>{
+      const o = offCais.get(c.nom) || {valeur:0};
+      return [c.nom, F(c.tickets), F(c.produits), F(c.net),
+              F1(PCT(c.net,totCA))+' %', F(c.panier_moyen), F(o.valeur),
+              c.net ? F1(100*o.valeur/c.net)+' %' : '—',
+              barCell(100*c.net/maxCA, C.accentMark)];
+    }));
+
+  document.getElementById('ca-table').insertAdjacentHTML('beforeend',
+    `<div class="foot">Source cumulée sans date : ces chiffres couvrent toute la
+     période et ne réagissent pas au filtre. Le « panier moyen » est celui que
+     le logiciel calcule lui-même.</div>`);
+};
+
+/* =====================================================================
+   PAGE 7 — REGLEMENTS
+   ===================================================================== */
+
+RENDER['reglements'] = function(){
+  const reg = [...(DATA.reglements || [])].sort((a,b)=>b.montant-a.montant);
+  const tot = reg.reduce((a,b)=>a+b.montant, 0);
+  const totNb = reg.reduce((a,b)=>a+b.nombre, 0);
+
+  const trouver = n => reg.find(r=>_sansAccents(r.moyen).includes(n)) || {montant:0, nombre:0};
+  const especes = trouver('espece');
+  const credit = trouver('credit');
+
+  document.getElementById('re-kpi').innerHTML = [
+    tuile({k:'TOTAL ENCAISSÉ', v:Fc(tot), u:'F', hero:true,
+           d:F(totNb)+' opérations'}),
+    tuile({k:'PART DES ESPÈCES', v:F1(PCT(especes.montant,tot)), u:'%', cls:'warn',
+           d:F(especes.montant)+' F en numéraire'}),
+    tuile({k:'VENTES À CRÉDIT', v:Fc(credit.montant), u:'F', cls:'crit',
+           d:F(credit.nombre)+" opérations non encaissées"}),
+    tuile({k:'MOYENS UTILISÉS', v:F(reg.filter(r=>r.montant>0).length),
+           d:'sur la période complète'}),
+  ].join('');
+
+  document.getElementById('re-constat').innerHTML = constat('warn',
+    'Une dépendance forte aux espèces, et des ventes à crédit',
+    `<b>${F1(PCT(especes.montant,tot))} %</b> des encaissements se font en numéraire
+     (${F(especes.montant)} F), et <b>${F(credit.montant)} F</b> de ventes sont
+     enregistrées à crédit sur ${F(credit.nombre)} opérations.
+     <br><br>Le numéraire ne laisse pas de trace bancaire : c'est le moyen de
+     règlement le plus exposé aux écarts de caisse, et celui qui demande le plus
+     de contrôle. Les ventes à crédit, elles, sont du chiffre comptabilisé qui
+     n'est pas encore rentré — le suivi du recouvrement ne figure pas dans ces
+     exports.`);
+
+  setChart('c-re-part', {type:'doughnut',
+    data:{labels:reg.map(r=>r.moyen),
+      datasets:[{data:reg.map(r=>r.montant),
+        backgroundColor:reg.map((_,i)=>C.seq[Math.min(C.seq.length-1, 1+i*2)]),
+        borderColor:C.surface, borderWidth:3}]},
+    options:{cutout:'58%', plugins:{legend:legendTop(true),
+      tooltip:Object.assign({},TOOLTIP,{callbacks:{
+        label:c=>' '+c.label+' : '+FCFA(c.parsed)
+                 +'  ('+F1(PCT(c.parsed,tot))+' %)'}})}}});
+
+  setChart('c-re-nb', {type:'bar',
+    data:{labels:reg.map(r=>r.moyen), datasets:[Object.assign({}, BAR, {
+      label:'Opérations', data:reg.map(r=>r.nombre), backgroundColor:C.seq[4]})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{label:c=>' '+F(c.parsed.y)+' opérations',
+          footer:items=>{const r=reg[items[0].dataIndex];
+            return 'Montant moyen : '+FCFA(r.nombre ? r.montant/r.nombre : 0);}}})},
+      scales:{y:axisY(v=>F(v)), x:axisX()}}});
+
+  document.getElementById('re-table').innerHTML = tableHTML(
+    [{t:'Moyen de règlement'},{t:'Opérations',num:true},{t:'Montant',num:true},
+     {t:'% du total',num:true},{t:'Montant moyen',num:true}],
+    reg.map(r=>[r.moyen, F(r.nombre), F(r.montant), F1(PCT(r.montant,tot))+' %',
+                F(r.nombre ? r.montant/r.nombre : 0)]));
+};
+
+/* Comparaison insensible aux accents : l'export ecrit « ESPÈCES » et
+   « Règlement à crédit », et chercher la sous-chaine « espece » sur la
+   forme accentuee ne trouverait rien. */
+function _sansAccents(s){
+  return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+}
+
+/* =====================================================================
+   LE SUIVI MENSUEL
+   ---------------------------------------------------------------------
+   Trois pages -- compte de resultat, depenses, rapprochement -- qui ne
+   viennent pas du POS mais du classeur tenu par l'exploitation. Elles
+   comblent exactement ce que la navigation annoncait comme impossible :
+   les exports Infogest ne portent aucun prix d'achat.
+
+   POURQUOI CES PAGES NE SUIVENT PAS LE FILTRE DE PERIODE
+   ------------------------------------------------------
+   Le classeur couvre deux saisons separees par treize mois de fermeture
+   pour renovation. Le filtre de periode est cale sur l'export de
+   caisse, qui ne couvre que la seconde. Le lui appliquer ferait
+   disparaitre onze mois d'exploitation sans que rien ne l'explique.
+   Chaque page dit donc quelle periode elle couvre.
+
+   AUCUN RATIO N'EST STOCKE
+   ------------------------
+   Taux de marge, rentabilite, part d'un poste : tout est recalcule
+   somme / somme a l'affichage. Un taux mensuel moyenne entre douze mois
+   ne vaut pas le taux de l'annee des que les mois pesent des montants
+   differents -- et ils en pesent.
+   ===================================================================== */
+
+const MEN = () => DATA.mensuel || {mois: [], postes_mois: [], jours_declares: [],
+                                   controles: [], canaux: [], classes: {}};
+
+const moisLibelle = m => MOIS[parseInt(m.slice(5, 7), 10) - 1] + ' ' + m.slice(2, 4);
+
+/* Accord en nombre. Une phrase construite par concatenation ecrit
+   « 1 nuits font l'inverse » des que le compte tombe a un, et ce genre
+   de faute fait douter du chiffre a cote. */
+const nb = (n, singulier, pluriel) => F(n) + ' ' + (n > 1 ? pluriel : singulier);
+
+const rangMois = m => parseInt(m.slice(0, 4), 10) * 12 + parseInt(m.slice(5, 7), 10);
+
+/* Le resultat n'est calcule que si la paie est connue. Un mois dont la
+   paie n'a pas ete saisie afficherait sinon un benefice majore d'un
+   mois entier de salaires -- et rien a l'ecran ne dirait pourquoi. */
+function resultatMois(m){
+  if(m.paie === null || m.paie === undefined) return null;
+  return m.ca - m.matiere - m.opex - m.capex - m.paie;
+}
+
+/* Les mois consecutifs forment une saison ; treize mois de fermeture en
+   separent deux. On decoupe sur les trous plutot que sur une date
+   ecrite en dur : une troisieme saison se rangerait toute seule. */
+function saisons(){
+  const out = [];
+  for(const m of MEN().mois){
+    const courante = out.length ? out[out.length - 1] : null;
+    if(courante && rangMois(m.m) - rangMois(courante[courante.length - 1].m) === 1){
+      courante.push(m);
+    } else {
+      out.push([m]);
+    }
+  }
+  return out;
+}
+
+function saisonCourante(){
+  const s = saisons();
+  return s.length ? s[s.length - 1] : [];
+}
+
+/* Le libelle d'une saison, pour que chaque tuile dise sur quoi elle
+   porte sans qu'on ait a le deviner. */
+function libelleSaison(saison){
+  if(!saison.length) return '';
+  return saison.length === 1 ? moisLibelle(saison[0].m)
+    : moisLibelle(saison[0].m) + ' → ' + moisLibelle(saison[saison.length - 1].m);
+}
+
+/* L'ordre est FIXE et la couleur attachee a la nature de la charge, pas
+   a son rang : la masse salariale garde sa teinte d'un mois a l'autre
+   meme quand elle passe devant les achats. */
+const CHARGES = [
+  {k: 'matiere', l: 'Achats matière'},
+  {k: 'opex',    l: "Charges d'exploitation"},
+  {k: 'paie',    l: 'Masse salariale'},
+  {k: 'capex',   l: 'Investissements'},
+];
+/* Une rampe, et non quatre teintes : ces quatre charges forment une
+   decomposition ORDONNEE, du plus amont (la matiere) au plus aval
+   (l'investissement), et la pile les empile dans cet ordre. Le sombre
+   vers le clair porte donc l'ordre, du bas vers le haut, dans le meme
+   sens que la legende.
+
+   Le choix des quatre echelons est MESURE, pas pris au jugement. Sur
+   les huit de la rampe, avec la ligne d'or du chiffre d'affaires dans
+   la comparaison, c'est le sous-ensemble qui maximise l'ecart minimal
+   entre toutes les paires :
+
+       paires les plus proches, DE2000    normal  deut  prot  trit
+       matiere / opex                       15,7  10,7  11,6  18,6
+       paie / investissements                9,3  13,0  12,0   7,4
+
+   Une seule paire descend sous 9, en vision tritanope, et elle porte le
+   plus petit segment de la pile. Le premier jeu essaye (echelons 2, 4,
+   6, 8) tombait a 7,1 sur la paire matiere / exploitation, c'est-a-dire
+   sur les deux plus GROS segments : c'etait la que ca comptait.
+
+   Aucune quatrieme teinte n'etait disponible : la palette d'AMNESIA est
+   l'or du logo et une rampe bleue, et tous les jeux mixtes essayes
+   (cyan, bleu clair, vert d'etat) tombaient entre 3,1 et 7,9 face a
+   l'or. Une teinte du triplet produit -- boisson, plat, chicha -- aurait
+   passe la mesure, mais elle designe une nature d'article sur les deux
+   tableaux de bord : la reprendre pour une charge ferait mentir la
+   couleur ailleurs. */
+const couleurCharge = () => ({matiere: C.seq[0], opex: C.seq[3],
+                              paie: C.seq[6], capex: C.seq[7]});
+
+/* =====================================================================
+   PAGE — COMPTE DE RESULTAT
+   ===================================================================== */
+
+RENDER['resultat'] = function(){
+  const tous = MEN().mois;
+  const saison = saisonCourante();
+  const complets = saison.filter(m => resultatMois(m) !== null);
+  const CC = couleurCharge();
+
+  const t = k => complets.reduce((s, m) => s + (m[k] || 0), 0);
+  const ca = t('ca'), matiere = t('matiere'), opex = t('opex');
+  const capex = t('capex'), paie = t('paie');
+  const margeBrute = ca - matiere;
+  const resultat = margeBrute - opex - capex - paie;
+  const periode = libelleSaison(complets);
+
+  document.getElementById('cr-kpi').innerHTML = [
+    tuile({k: "CHIFFRE D'AFFAIRES", v: Fc(ca), u: 'F', hero: true, cls: 'accent',
+           d: F(ca) + ' F · ' + F(complets.length) + ' mois · ' + periode}),
+    tuile({k: 'MARGE BRUTE', v: Fc(margeBrute), u: 'F',
+           d: F1(PCT(margeBrute, ca)) + " % du chiffre d'affaires"}),
+    tuile({k: 'MASSE SALARIALE', v: Fc(paie), u: 'F',
+           d: F1(PCT(paie, ca)) + " % du chiffre d'affaires"}),
+    tuile({k: 'RÉSULTAT NET', v: Fc(resultat), u: 'F',
+           cls: resultat >= 0 ? 'good' : 'crit',
+           d: F1(PCT(resultat, ca)) + ' % de rentabilité · après investissements'}),
+  ].join('');
+
+  // --- le constat ----------------------------------------------------
+  const incomplets = saison.filter(m => resultatMois(m) === null);
+  let pire = null;
+  for(const m of complets)
+    if(pire === null || resultatMois(m) < resultatMois(pire)) pire = m;
+
+  document.getElementById('cr-constat').innerHTML = constat(
+    resultat >= 0 ? 'good' : 'crit',
+    resultat >= 0 ? `La saison dégage ${F(resultat)} F de résultat`
+                  : `La saison perd ${F(Math.abs(resultat))} F`,
+    `Sur ${F(complets.length)} mois (${periode}), ${F(ca)} F encaissés pour
+     ${F(matiere + opex + capex + paie)} F de charges. La marge brute tient à
+     <b>${F1(PCT(margeBrute, ca))} %</b>, mais l'exploitation, la paie et les
+     investissements en reprennent
+     <b>${F1(PCT(opex + paie + capex, ca))} %</b> du chiffre d'affaires.
+     ${pire && resultatMois(pire) < 0
+       ? ` Le mois le plus lourd est ${moisLibelle(pire.m)}, à ${F(resultatMois(pire))} F.`
+       : ''}
+     ${incomplets.length
+       ? `<br><br>${nb(incomplets.length, 'mois', 'mois')}
+          (${incomplets.map(m => moisLibelle(m.m)).join(', ')})
+          ${incomplets.length > 1
+            ? "n'ont pas de paie saisie dans le classeur : ils sont écartés de ces"
+              + ' totaux plutôt que comptés sans salaires, ce qui les ferait passer'
+              + ' pour les plus rentables de la saison.'
+            : "n'a pas de paie saisie dans le classeur : il est écarté de ces"
+              + ' totaux plutôt que compté sans salaires, ce qui le ferait passer'
+              + ' pour le plus rentable de la saison.'}`
+       : ''}`);
+
+  // --- la cascade mensuelle -------------------------------------------
+  // Barres empilees pour les charges, ligne pour le chiffre d'affaires :
+  // meme unite, donc un seul axe. Jamais deux echelles verticales, qui
+  // laissent choisir au dessinateur l'endroit ou les courbes se croisent.
+  const lab = tous.map(m => moisLibelle(m.m));
+  setChart('c-cr-cascade', {
+    data: {labels: lab, datasets: [
+      ...CHARGES.map(ch => Object.assign({}, STACK, {
+        type: 'bar', label: ch.l, stack: 'charges',
+        data: tous.map(m => m[ch.k] || 0), backgroundColor: CC[ch.k]})),
+      Object.assign({}, LINE, {
+        type: 'line', label: "Chiffre d'affaires", data: tous.map(m => m.ca),
+        borderColor: C.accentMark, backgroundColor: C.accentMark,
+        pointBackgroundColor: C.accentMark}),
+    ]},
+    options: {interaction: {mode: 'index', intersect: false},
+      plugins: {legend: legendTop(true), tooltip: Object.assign({}, TOOLTIP, {
+        callbacks: {
+          // La valeur relative, immediatement : chaque charge en part du
+          // chiffre d'affaires DU MOIS, pas du total de la periode.
+          label: c => {
+            const m = tous[c.dataIndex];
+            const part = (m.ca && c.dataset.type !== 'line')
+              ? '  (' + F1(PCT(c.parsed.y, m.ca)) + ' % du CA)' : '';
+            return ' ' + c.dataset.label + ' : ' + FCFA(c.parsed.y) + part;
+          },
+          footer: items => {
+            const m = tous[items[0].dataIndex];
+            const r = resultatMois(m);
+            return r === null ? 'Résultat : paie non saisie'
+              : 'Résultat : ' + FCFA(r) + '  (' + F1(PCT(r, m.ca)) + ' %)';
+          }}})},
+      scales: {y: axisY(), x: axisX()}}});
+
+  document.getElementById('cr-cascade-t').innerHTML = tableHTML(
+    [{t: 'Mois'}, {t: "Chiffre d'affaires", num: true}, {t: 'Achats matière', num: true},
+     {t: "Charges d'exploitation", num: true}, {t: 'Masse salariale', num: true},
+     {t: 'Investissements', num: true}, {t: 'Résultat', num: true}],
+    tous.map(m => {
+      const r = resultatMois(m);
+      return [moisLibelle(m.m), F(m.ca), F(m.matiere), F(m.opex),
+              m.paie === null ? 'non saisie' : F(m.paie), F(m.capex),
+              r === null ? '—' : F(r)];
+    }));
+
+  // --- structure des charges ------------------------------------------
+  const structure = CHARGES.map(ch => ({l: ch.l, v: t(ch.k), c: CC[ch.k]}))
+                           .filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  barHorizontale('c-cr-structure', structure.map(x => x.l),
+                 structure.map(x => x.v), structure.map(x => x.c));
+
+  // --- masse salariale par service -------------------------------------
+  const services = new Map();
+  for(const m of complets)
+    for(const s of (m.paie_services || []))
+      services.set(s.service, (services.get(s.service) || 0) + s.montant);
+  const parService = [...services.entries()].sort((a, b) => b[1] - a[1]);
+  barHorizontale('c-cr-paie', parService.map(x => x[0]),
+                 parService.map(x => x[1]), C.seq[5]);
+
+  // --- les deux taux ----------------------------------------------------
+  // Un ratio n'a de sens que si son denominateur en a un. Le dernier
+  // mois avant la fermeture a encaisse deux ordres de grandeur de moins
+  // qu'un mois ordinaire : sa rentabilite se compte en centaines de
+  // pour cent negatifs, ce qui ecrase l'axe et rend les vingt et un
+  // autres mois illisibles. Les montants sont calcules a l'affichage et
+  // nommes dans le pied de carte -- ils ne sont pas ecrits ici, ce
+  // fichier etant versionne.
+  //
+  // Le graphique se limite donc a la saison en cours, et le dit. Les
+  // taux de la premiere saison ne sont pas perdus : ils sont dans le
+  // tableau ci-dessous, ou une valeur aberrante n'empeche pas de lire
+  // ses voisines. Borner l'axe en laissant le point sortir du cadre
+  // aurait cache une mesure sans le signaler.
+  const labSaison = saison.map(m => moisLibelle(m.m));
+  setChart('c-cr-taux', {type: 'line',
+    data: {labels: labSaison, datasets: [
+      Object.assign({}, LINE, {label: 'Taux de marge brute',
+        data: saison.map(m => PCT(m.ca - m.matiere, m.ca)),
+        borderColor: C.accentMark, backgroundColor: C.accentMark,
+        pointBackgroundColor: C.accentMark}),
+      Object.assign({}, LINE, {label: 'Rentabilité nette',
+        data: saison.map(m => {
+          const r = resultatMois(m);
+          return r === null ? null : PCT(r, m.ca);
+        }),
+        borderColor: C.compare, backgroundColor: C.compare,
+        pointBackgroundColor: C.compare, spanGaps: false}),
+    ]},
+    options: {interaction: {mode: 'index', intersect: false},
+      plugins: {legend: legendTop(true), tooltip: Object.assign({}, TOOLTIP, {
+        callbacks: {label: c => ' ' + c.dataset.label + ' : '
+          + (c.parsed.y === null ? '—' : F1(c.parsed.y) + ' %')}})},
+      scales: {y: axisY(v => F1(v) + ' %'), x: axisX()}}});
+
+  // Le mois cite est celui qui JUSTIFIE l'exclusion -- le plus faible
+  // chiffre d'affaires des mois ecartes -- et non le dernier de la
+  // liste : c'est lui qui rendait l'axe inutilisable.
+  const horsTaux = tous.filter(m => !saison.includes(m));
+  let creux = null;
+  for(const m of horsTaux) if(creux === null || m.ca < creux.ca) creux = m;
+  const noteTaux = document.getElementById('cr-taux-note');
+  if(noteTaux) noteTaux.innerHTML = horsTaux.length
+    ? `Saison en cours uniquement (${libelleSaison(saison)}).
+       Les ${F(horsTaux.length)} mois de la saison précédente sont écartés de ce
+       graphique : ${moisLibelle(creux.m)} n'a encaissé que ${F(creux.ca)} F, soit
+       une rentabilité de ${F1(PCT(resultatMois(creux), creux.ca))} % qui écrase
+       l'échelle sans rien apprendre des autres mois. Leurs taux figurent dans le
+       tableau ci-dessous, où une valeur aberrante n'empêche pas de lire ses
+       voisines.`
+    : '';
+
+  // --- le tableau --------------------------------------------------------
+  document.getElementById('cr-table').innerHTML = tableHTML(
+    [{t: 'Mois'}, {t: 'Nuits', num: true}, {t: "Chiffre d'affaires", num: true},
+     {t: 'Achats matière', num: true}, {t: 'Marge brute', num: true},
+     {t: 'Taux de marge', num: true}, {t: "Charges d'exploit.", num: true},
+     {t: 'Masse salariale', num: true}, {t: 'Investissements', num: true},
+     {t: 'Résultat', num: true}, {t: 'Rentabilité', num: true}],
+    tous.map(m => {
+      const r = resultatMois(m);
+      return [m.m + ' · ' + moisLibelle(m.m), F(m.nuits), F(m.ca), F(m.matiere),
+              F(m.ca - m.matiere), F1(PCT(m.ca - m.matiere, m.ca)) + ' %',
+              F(m.opex), m.paie === null ? 'non saisie' : F(m.paie), F(m.capex),
+              r === null ? '—' : F(r),
+              r === null ? '—' : F1(PCT(r, m.ca)) + ' %'];
+    }));
+  rendreFiltrable('cr-table', 'Filtrer : 2026, juin, 2026-07…');
+
+  // --- le renvoi vers les ecarts --------------------------------------------
+  // Le detail est sur sa propre page. Ce qui reste ici est le minimum
+  // pour qu'on ne lise pas ce compte de resultat en croyant le classeur
+  // intact -- avec le compte, qui dit s'il y a lieu d'aller voir.
+  const redresses = MEN().controles.length;
+  document.getElementById('cr-renvoi').innerHTML = redresses
+    ? constat('warn', `${nb(redresses, 'écart relevé', 'écarts relevés')} dans le classeur d'origine`,
+        `Ce compte de résultat n'est pas la recopie du classeur : les feuilles de
+         la première saison lisent une colonne de paie décalée, trois prestataires
+         échappent au total qui devrait les couvrir, et deux postes de charges sont
+         mal comptés. Chaque redressement est détaillé et chiffré sur la page
+         <a href="#" onclick="go('ecarts');return false;"><b>Écarts &amp;
+         contrôles</b></a>.`)
+    : '';
+};
+
+/* =====================================================================
+   PAGE — DEPENSES
+   ===================================================================== */
+
+RENDER['depenses'] = function(){
+  const tous = MEN().mois;
+  const saison = saisonCourante();
+  const moisSaison = new Set(saison.map(m => m.m));
+  const lignes = MEN().postes_mois.filter(l => moisSaison.has(l.m));
+  const classes = MEN().classes || {};
+
+  const parClasse = {};
+  for(const l of lignes) parClasse[l.classe] = (parClasse[l.classe] || 0) + l.montant;
+  const ca = saison.reduce((s, m) => s + m.ca, 0);
+  const charges = (parClasse.matiere || 0) + (parClasse.opex || 0)
+                + (parClasse.capex || 0);
+
+  document.getElementById('dp-kpi').innerHTML = [
+    tuile({k: 'TOTAL DES CHARGES', v: Fc(charges), u: 'F', hero: true, cls: 'accent',
+           d: F1(PCT(charges, ca)) + " % du chiffre d'affaires · "
+              + libelleSaison(saison)}),
+    tuile({k: 'ACHATS MATIÈRE', v: Fc(parClasse.matiere || 0), u: 'F',
+           d: F1(PCT(parClasse.matiere || 0, ca)) + " % du chiffre d'affaires"}),
+    tuile({k: "CHARGES D'EXPLOITATION", v: Fc(parClasse.opex || 0), u: 'F',
+           d: F1(PCT(parClasse.opex || 0, ca)) + " % du chiffre d'affaires"}),
+    tuile({k: 'INVESTISSEMENTS', v: Fc(parClasse.capex || 0), u: 'F',
+           d: F1(PCT(parClasse.capex || 0, ca)) + " % du chiffre d'affaires"}),
+  ].join('');
+
+  // Memes echelons que la cascade du compte de resultat : une charge
+  // garde sa couleur d'une page a l'autre.
+  const CC = couleurCharge();
+
+  // --- les postes ---------------------------------------------------------
+  const postes = new Map();
+  for(const l of lignes){
+    if(l.classe === 'tresorerie') continue;   // un mouvement, pas une charge
+    const e = postes.get(l.poste) || {montant: 0, classe: l.classe};
+    e.montant += l.montant;
+    postes.set(l.poste, e);
+  }
+  const rangs = [...postes.entries()].sort((a, b) => b[1].montant - a[1].montant);
+  // La couleur porte la NATURE du poste, pas son rang : deux postes de
+  // meme nature se lisent ensemble sans consulter de legende.
+  const parNature = {matiere: CC.matiere, opex: CC.opex, capex: CC.capex};
+  barHorizontale('c-dp-postes', rangs.map(x => x[0]),
+                 rangs.map(x => x[1].montant),
+                 rangs.map(x => parNature[x[1].classe] || C.seq[3]));
+
+  const totalPostes = rangs.reduce((s, x) => s + x[1].montant, 0);
+  document.getElementById('dp-postes-t').innerHTML = tableHTML(
+    [{t: 'Poste'}, {t: 'Nature'}, {t: 'Montant', num: true}, {t: 'Part', num: true}],
+    rangs.map(x => [x[0], classes[x[1].classe] || x[1].classe, F(x[1].montant),
+                    F1(PCT(x[1].montant, totalPostes)) + ' %']));
+
+  // --- evolution mensuelle -------------------------------------------------
+  const pile = [
+    {k: 'matiere', l: 'Achats matière',         c: CC.matiere},
+    {k: 'opex',    l: "Charges d'exploitation", c: CC.opex},
+    {k: 'capex',   l: 'Investissements',        c: CC.capex},
+  ];
+  setChart('c-dp-mois', {type: 'bar',
+    data: {labels: tous.map(m => moisLibelle(m.m)),
+      datasets: pile.map(p => Object.assign({}, STACK, {
+        label: p.l, data: tous.map(m => m[p.k] || 0), backgroundColor: p.c}))},
+    options: {interaction: {mode: 'index', intersect: false},
+      plugins: {legend: legendTop(true), tooltip: Object.assign({}, TOOLTIP, {
+        callbacks: {
+          label: c => {
+            const m = tous[c.dataIndex];
+            return ' ' + c.dataset.label + ' : ' + FCFA(c.parsed.y)
+                   + (m.ca ? '  (' + F1(PCT(c.parsed.y, m.ca)) + ' % du CA)' : '');
+          },
+          footer: items => {
+            const m = tous[items[0].dataIndex];
+            const s = m.matiere + m.opex + m.capex;
+            return 'Total : ' + FCFA(s)
+                   + (m.ca ? '  (' + F1(PCT(s, m.ca)) + ' % du CA)' : '');
+          }}})},
+      scales: {x: Object.assign(axisX(), {stacked: true}),
+               y: Object.assign(axisY(), {stacked: true})}}});
+
+  document.getElementById('dp-mois-t').innerHTML = tableHTML(
+    [{t: 'Mois'}, {t: 'Achats matière', num: true}, {t: "Charges d'exploit.", num: true},
+     {t: 'Investissements', num: true}, {t: 'Total', num: true},
+     {t: '% du CA', num: true}],
+    tous.map(m => [moisLibelle(m.m), F(m.matiere), F(m.opex), F(m.capex),
+                   F(m.matiere + m.opex + m.capex),
+                   F1(PCT(m.matiere + m.opex + m.capex, m.ca)) + ' %']));
+
+  // --- le detail -------------------------------------------------------------
+  const totalMois = {};
+  for(const l of MEN().postes_mois)
+    totalMois[l.m] = (totalMois[l.m] || 0) + l.montant;
+  document.getElementById('dp-table').innerHTML = tableHTML(
+    [{t: 'Mois'}, {t: 'Poste'}, {t: 'Nature'}, {t: 'Montant', num: true},
+     {t: 'Part du mois', num: true}],
+    MEN().postes_mois.map(l => [l.m + ' · ' + moisLibelle(l.m), l.poste,
+      classes[l.classe] || l.classe, F(l.montant),
+      F1(PCT(l.montant, totalMois[l.m])) + ' %']));
+  rendreFiltrable('dp-table', 'Filtrer : LOYERS, 2026-07, matière…');
+};
+
+/* =====================================================================
+   PAGE — RAPPROCHEMENT
+   ---------------------------------------------------------------------
+   Deux mesures du meme chiffre d'affaires. Elles ne se corrigent pas
+   l'une l'autre : la caisse n'enregistre que ce qui est passe par le
+   logiciel, le classeur note ce que l'exploitation declare avoir
+   encaisse. Les confronter est le seul moyen de voir ce qui echappe a
+   l'une ou a l'autre.
+   ===================================================================== */
+
+RENDER['rapprochement'] = function(){
+  // Le calcul vit dans rapprochement(), partage avec la page « Ecarts &
+  // controles ». Deux copies du meme rapprochement donneraient deux
+  // reponses possibles le jour ou l'une serait corrigee.
+  const {decl, pos, jours, communs, totalDecl, totalPos, concordantes,
+         seulesDecl, seulesPos, montantSeulesDecl, montantSeulesPos}
+    = rapprochement();
+  const ecartPct = PCT(totalDecl - totalPos, totalPos);
+
+  document.getElementById('rp-kpi').innerHTML = [
+    tuile({k: "DÉCLARÉ PAR L'EXPLOITATION", v: Fc(totalDecl), u: 'F', hero: true,
+           cls: 'accent', d: F(jours.length) + ' nuits sur '
+                             + F(communs.length) + ' mois communs'}),
+    tuile({k: 'ENREGISTRÉ EN CAISSE', v: Fc(totalPos), u: 'F',
+           d: "chiffre d'affaires net du logiciel"}),
+    tuile({k: 'ÉCART', v: Fc(totalDecl - totalPos), u: 'F',
+           cls: Math.abs(ecartPct) > 5 ? 'crit' : 'warn',
+           d: F1(ecartPct) + ' % du chiffre de caisse'}),
+    tuile({k: 'NUITS CONCORDANTES', v: F(concordantes), u: '/ ' + F(jours.length),
+           d: F1(PCT(concordantes, jours.length)) + ' % des nuits au franc près'}),
+  ].join('');
+
+  document.getElementById('rp-constat').innerHTML = constat(
+    Math.abs(ecartPct) > 5 ? 'crit' : 'warn',
+    `Deux sources, ${F1(Math.abs(ecartPct))} % d'écart`,
+    `Le classeur d'exploitation déclare <b>${F(totalDecl)} F</b> là où la caisse
+     enregistre <b>${F(totalPos)} F</b> sur les mêmes ${F(jours.length)} nuits.
+     Seules <b>${F(concordantes)}</b> d'entre elles coïncident au franc près.
+     ${seulesDecl.length
+       ? `<br><br><b>${nb(seulesDecl.length, 'nuit est facturée', 'nuits sont facturées')}</b>
+          dans le classeur sans exister en caisse, pour
+          ${F(montantSeulesDecl)} F.` : ''}
+     ${seulesPos.length
+       ? ` <b>${nb(seulesPos.length, "nuit fait l'inverse", "nuits font l'inverse")}</b>,
+          pour ${F(montantSeulesPos)} F.` : ''}
+     <br><br>Aucune des deux ne corrige l'autre : la caisse ne voit que ce qui est
+     passé par le logiciel, le classeur note ce que l'exploitation dit avoir
+     encaissé. Le tableau du bas donne la nuit par nuit ; taper « écart » n'y
+     laisse que les nuits où les deux divergent.`);
+
+  // --- par mois -------------------------------------------------------------
+  const parMois = communs.map(m => {
+    const dm = jours.filter(d => d.startsWith(m));
+    return {m,
+      decl: dm.reduce((s, d) => s + (decl.get(d) || 0), 0),
+      pos: dm.reduce((s, d) => s + (pos.get(d) || 0), 0)};
+  });
+  setChart('c-rp-mois', {type: 'bar',
+    data: {labels: parMois.map(x => moisLibelle(x.m)), datasets: [
+      Object.assign({}, BAR, {label: "Déclaré par l'exploitation",
+        data: parMois.map(x => x.decl), backgroundColor: C.accentMark}),
+      Object.assign({}, BAR, {label: 'Enregistré en caisse',
+        data: parMois.map(x => x.pos), backgroundColor: C.compare}),
+    ]},
+    options: {interaction: {mode: 'index', intersect: false},
+      plugins: {legend: legendTop(true), tooltip: Object.assign({}, TOOLTIP, {
+        callbacks: {label: c => ' ' + c.dataset.label + ' : ' + FCFA(c.parsed.y),
+          footer: items => {
+            const x = parMois[items[0].dataIndex];
+            return 'Écart : ' + FCFA(x.decl - x.pos)
+                   + '  (' + F1(PCT(x.decl - x.pos, x.pos)) + ' %)';
+          }}})},
+      scales: {y: axisY(), x: axisX()}}});
+
+  document.getElementById('rp-mois-t').innerHTML = tableHTML(
+    [{t: 'Mois'}, {t: 'Déclaré', num: true}, {t: 'Caisse', num: true},
+     {t: 'Écart', num: true}, {t: 'Écart %', num: true}],
+    parMois.map(x => [moisLibelle(x.m), F(x.decl), F(x.pos), F(x.decl - x.pos),
+                      F1(PCT(x.decl - x.pos, x.pos)) + ' %']));
+
+  // --- canaux d'encaissement --------------------------------------------------
+  const saison = saisonCourante();
+  const canaux = (MEN().canaux || [])
+    .map(c => ({l: c.l, v: saison.reduce((s, m) => s + (m[c.c] || 0), 0)}))
+    .filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  barHorizontale('c-rp-canaux', canaux.map(x => x.l), canaux.map(x => x.v),
+                 canaux.map((_, i) => C.seq[Math.min(C.seq.length - 1, 1 + i)]));
+
+  // --- nuit par nuit ------------------------------------------------------------
+  // L'etat est ecrit en toutes lettres dans la ligne : le filtre du
+  // tableau porte sur le texte, et « ecart » est la question qu'on pose
+  // a ce tableau. Elle doit etre atteignable sans choisir de colonne.
+  document.getElementById('rp-table').innerHTML = tableHTML(
+    [{t: 'Nuit'}, {t: 'Déclaré', num: true}, {t: 'Caisse', num: true},
+     {t: 'Différence', num: true}, {t: 'État'}],
+    jours.map(d => {
+      const a = decl.get(d), b = pos.get(d);
+      const etat = a === undefined ? 'absente du classeur'
+        : b === undefined ? 'absente de la caisse'
+        : Math.abs(a - b) < 1 ? 'concordante' : 'écart';
+      return [dateLabel(d), a === undefined ? '—' : F(a),
+              b === undefined ? '—' : F(b),
+              (a === undefined || b === undefined) ? '—' : F(a - b), etat];
+    }));
+  rendreFiltrable('rp-table', 'Filtrer : écart, concordante, une date…');
+};
+
+/* =====================================================================
+   PAGE — ECARTS & CONTROLES
+   ---------------------------------------------------------------------
+   Trois sources mesurent le meme etablissement :
+
+     la caisse       ce que le logiciel Infogest a enregistre
+     le classeur     ce que l'exploitation declare encaisser et depenser
+     le resume       le total que le logiciel s'annonce a lui-meme
+
+   Elles ne tombent pas d'accord, et les faire coincider demanderait
+   d'en choisir une comme vraie. On ne le fait pas : on montre l'ecart,
+   on le chiffre, et on dit ce qu'il empeche de conclure.
+
+   POURQUOI UNE PAGE ENTIERE
+   -------------------------
+   Ces ecarts etaient disperses : le recoupement des exports en bas de
+   la synthese, les defauts du classeur en bas du compte de resultat, le
+   rapprochement sur sa propre page. Trois endroits pour une seule
+   question -- « peut-on se fier a ce chiffre ? » -- qui se pose avant
+   de lire le premier tableau, pas apres le dernier.
+
+   CETTE PAGE NE CALCULE RIEN DE NEUF
+   ----------------------------------
+   Elle LIT les memes controles que les autres pages. Refaire ici le
+   calcul du rapprochement donnerait deux reponses possibles a la meme
+   question le jour ou l'une des deux serait modifiee.
+   ===================================================================== */
+
+/* Le rapprochement declare / caisse, calcule une fois et reutilise par
+   la page « Rapprochement » comme par celle-ci. */
+function rapprochement(){
+  const declares = MEN().jours_declares;
+  const pos = new Map(DATA.resultat_jour.map(r => [r.d, r.net]));
+  const decl = new Map(declares.map(r => [r.d, r.ca]));
+
+  const moisPos = new Set(DATA.resultat_jour.map(r => r.d.slice(0, 7)));
+  const moisDecl = new Set(declares.map(r => r.d.slice(0, 7)));
+  const communs = [...moisPos].filter(m => moisDecl.has(m)).sort();
+  const ensemble = new Set(communs);
+
+  const jours = [...new Set([...decl.keys(), ...pos.keys()])]
+                  .filter(d => ensemble.has(d.slice(0, 7))).sort();
+
+  const totalDecl = jours.reduce((s, d) => s + (decl.get(d) || 0), 0);
+  const totalPos = jours.reduce((s, d) => s + (pos.get(d) || 0), 0);
+  const concordantes = jours.filter(d =>
+    decl.has(d) && pos.has(d) && Math.abs(decl.get(d) - pos.get(d)) < 1).length;
+  const seulesDecl = jours.filter(d => decl.has(d) && !pos.has(d) && decl.get(d));
+  const seulesPos = jours.filter(d => pos.has(d) && !decl.has(d) && pos.get(d));
+
+  return {decl, pos, jours, communs, totalDecl, totalPos, concordantes,
+          seulesDecl, seulesPos,
+          montantSeulesDecl: seulesDecl.reduce((s, d) => s + decl.get(d), 0),
+          montantSeulesPos: seulesPos.reduce((s, d) => s + pos.get(d), 0)};
+}
+
+/* La liste unique des anomalies, quelle qu'en soit l'origine.
+
+   Chaque entree porte un MONTANT quand il y en a un, et null quand il
+   n'y en a pas. Mettre zero a la place de « pas de montant » ferait
+   passer un defaut non chiffre pour un defaut sans consequence. */
+function anomalies(){
+  const out = [];
+  const r = rapprochement();
+  const c = DATA.controles || {};
+
+  // --- entre les deux mesures du chiffre d'affaires -------------------
+  out.push({
+    origine: 'Deux sources', gravite: 'crit',
+    titre: "Le classeur et la caisse ne trouvent pas le même chiffre d'affaires",
+    montant: r.totalDecl - r.totalPos,
+    effet: `Sur ${F(r.jours.length)} nuits communes, ${F(r.concordantes)} seulement
+            coïncident au franc près. L'écart se resserre avec le temps, ce qui se
+            lit comme une saisie qui se fiabilise plutôt que comme une source
+            fausse — mais aucune des deux ne peut servir de référence à l'autre
+            tant qu'il n'est pas expliqué.`,
+  });
+  if(r.seulesDecl.length) out.push({
+    origine: 'Deux sources', gravite: 'crit',
+    titre: nb(r.seulesDecl.length, 'nuit facturée', 'nuits facturées')
+           + ' dans le classeur sans exister en caisse',
+    montant: r.montantSeulesDecl,
+    effet: `Ces nuits portent un chiffre d'affaires que le logiciel n'a jamais
+            enregistré. Soit la caisse n'a pas été utilisée, soit la nuit n'a pas
+            eu lieu : les deux se corrigent, mais pas de la même façon.`,
+  });
+  if(r.seulesPos.length) out.push({
+    origine: 'Deux sources', gravite: 'warn',
+    titre: nb(r.seulesPos.length, 'nuit enregistrée', 'nuits enregistrées')
+           + ' en caisse et absente du classeur',
+    montant: r.montantSeulesPos,
+    effet: `L'inverse du cas précédent : la caisse a encaissé, le suivi manuel ne
+            l'a pas repris. Ces montants manquent au suivi de trésorerie.`,
+  });
+
+  // --- a l'interieur des exports de caisse -----------------------------
+  const LIBELLES = {
+    ca_net_journal_vs_resume: ["Chiffre d'affaires : journal contre résumé du logiciel",
+      'Les deux totaux du logiciel doivent tomber au franc près.'],
+    ca_net_journal_vs_detail: ["Chiffre d'affaires : journal contre détail par article",
+      `Le détail par article ne redonne pas le total du journal. La série
+       journalière retient le journal, seul à boucler sur le résumé du logiciel ;
+       les ventilations par produit portent donc cet écart.`],
+    offerts_lignes_vs_journal: ['Articles offerts : lignes contre journal',
+      'La somme des lignes offertes doit redonner le total journalier.'],
+    offerts_lignes_vs_resume: ['Articles offerts : lignes contre résumé du logiciel',
+      'La somme des lignes offertes doit redonner le total du résumé.'],
+  };
+  for(const [cle, [titre, effet]] of Object.entries(LIBELLES)){
+    const t = c[cle];
+    if(!t || t.concorde) continue;
+    out.push({origine: 'Exports de caisse', gravite: 'warn',
+              titre, montant: t.ecart, effet});
+  }
+  const rem = c.remises;
+  if(rem && Math.abs((rem.journal || 0) - (rem.detail || 0)) >= 1){
+    out.push({
+      origine: 'Exports de caisse', gravite: 'warn',
+      titre: 'Trois totaux de remise différents dans les mêmes exports',
+      montant: (rem.resume || 0) - (rem.journal || 0),
+      effet: (rem.note || '') + ' ' + (rem.lecture_plausible || ''),
+    });
+  }
+
+  // --- dans le classeur d'exploitation ---------------------------------
+  for(const ctrl of MEN().controles){
+    out.push({origine: "Classeur d'exploitation",
+              gravite: ctrl.gravite === 'info' ? 'good' : ctrl.gravite,
+              titre: ctrl.titre,
+              // Un defaut sans montant propre porte null, pas zero : un
+              // zero se lirait comme un defaut sans consequence.
+              montant: (ctrl.montant === undefined ? null : ctrl.montant),
+              effet: ctrl.corps});
+  }
+  return out;
+}
+
+const RANG_GRAVITE = {crit: 0, warn: 1, good: 2};
+const MOT_GRAVITE = {crit: 'CRITIQUE', warn: 'VIGILANCE', good: 'POUR MÉMOIRE'};
+
+RENDER['ecarts'] = function(){
+  const liste = anomalies()
+    .sort((a, b) => (RANG_GRAVITE[a.gravite] - RANG_GRAVITE[b.gravite])
+                    || (Math.abs(b.montant || 0) - Math.abs(a.montant || 0)));
+  const r = rapprochement();
+  const critiques = liste.filter(a => a.gravite === 'crit').length;
+  const chiffres = liste.filter(a => a.montant !== null);
+
+  document.getElementById('ec-kpi').innerHTML = [
+    tuile({k: 'ÉCARTS RELEVÉS', v: F(liste.length), hero: true,
+           cls: critiques ? 'crit' : 'accent',
+           d: F(critiques) + ' à trancher avant d\'utiliser un chiffre · '
+              + F(liste.length - critiques) + ' à surveiller'}),
+    tuile({k: 'ENTRE LES DEUX SOURCES DE CA', v: Fc(r.totalDecl - r.totalPos), u: 'F',
+           cls: 'crit',
+           d: F1(PCT(r.totalDecl - r.totalPos, r.totalPos)) + ' % du chiffre de caisse'}),
+    tuile({k: 'NUITS NON CONCORDANTES',
+           v: F(r.jours.length - r.concordantes), u: '/ ' + F(r.jours.length),
+           d: F1(PCT(r.jours.length - r.concordantes, r.jours.length))
+              + ' % des nuits communes'}),
+    tuile({k: 'ÉCARTS CHIFFRÉS', v: F(chiffres.length), u: '/ ' + F(liste.length),
+           d: 'les autres sont des défauts de construction, sans montant propre'}),
+  ].join('');
+
+  document.getElementById('ec-constat').innerHTML = constat(
+    critiques ? 'crit' : 'warn',
+    `${nb(liste.length, 'écart relevé', 'écarts relevés')} sur trois sources`,
+    `Ce tableau de bord croise la caisse Infogest, le classeur de suivi tenu par
+     l'exploitation et le résumé que le logiciel s'annonce à lui-même. Les trois
+     ne concordent pas, et cette page dit où.
+     <br><br>Aucun de ces écarts n'est corrigé en silence. Là où ce tableau de
+     bord retient une source plutôt qu'une autre, il l'écrit et donne le montant
+     que ce choix déplace. Un chiffre redressé sans trace est un chiffre que
+     plus personne ne peut contredire.
+     <br><br><b>Ce qu'il faut en retenir avant de lire les autres pages :</b> les
+     volumes, les classements et les tendances sont solides — ils reposent sur
+     une source unique et cohérente avec elle-même. C'est le <b>niveau absolu du
+     chiffre d'affaires</b> qui dépend de la source retenue, à
+     ${F1(Math.abs(PCT(r.totalDecl - r.totalPos, r.totalPos)))} % près.`);
+
+  // --- les trois sections ------------------------------------------------
+  const carte = a => {
+    const montant = a.montant === null ? ''
+      : `<div style="margin:6px 0 8px"><b style="font-size:15px">${F(a.montant)} F</b></div>`;
+    return `<div class="note ${a.gravite}" style="margin-bottom:12px">
+      <div class="note-title">${pill(MOT_GRAVITE[a.gravite], a.gravite)} ${a.titre}</div>
+      ${montant}${a.effet}</div>`;
+  };
+  const section = (id, origine) => {
+    const lignes = liste.filter(a => a.origine === origine);
+    document.getElementById(id).innerHTML = lignes.length
+      ? lignes.map(carte).join('')
+      : '<div class="foot">Aucun écart relevé sur cette source.</div>';
+  };
+  section('ec-sources', 'Deux sources');
+  section('ec-pos', 'Exports de caisse');
+  section('ec-classeur', "Classeur d'exploitation");
+
+  // --- le recapitulatif ---------------------------------------------------
+  // La gravite est ecrite en toutes lettres dans la ligne : le filtre du
+  // tableau porte sur le texte, et « critique » est la premiere chose
+  // qu'on lui demande.
+  document.getElementById('ec-table').innerHTML = tableHTML(
+    [{t: 'Gravité'}, {t: 'Origine'}, {t: 'Écart constaté'}, {t: 'Montant', num: true}],
+    liste.map(a => [MOT_GRAVITE[a.gravite].toLowerCase(), a.origine, a.titre,
+                    a.montant === null ? '—' : F(a.montant)]));
+  rendreFiltrable('ec-table', 'Filtrer : critique, classeur, caisse…');
+};

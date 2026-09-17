@@ -1,0 +1,433 @@
+<!-- =====================================================================
+     AMNESIA — Les sept pages
+     ---------------------------------------------------------------------
+     Structure identique a celle de TABOO : une balise section par page,
+     sections que le chassis affiche une a une, remplies par les fonctions
+     RENDER[...] d'amnesia_render.js.
+
+     Aucune valeur n'est ecrite ici. Tout ce qui se lit a l'ecran vient
+     des donnees ; ce fichier ne pose que les emplacements et les
+     explications qui ne dependent pas des chiffres.
+     ===================================================================== -->
+
+<!-- ============================ SYNTHESE ============================ -->
+<section class="page" id="page-synthese">
+  <div class="grid g4" id="sy-kpi"></div>
+
+  <div id="sy-constat"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Ce qui est encaissé, ce qui est donné</h3>
+      <div class="sub">Deux séries sur la même échelle : le chiffre d'affaires net
+        de chaque nuit, et la valeur des articles offerts cette nuit-là. L'écart
+        entre les deux courbes est ce que l'établissement aurait pu encaisser.</div></div>
+      <button class="mini" data-toggle="sy-serie-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-sy-serie"></canvas></div>
+    <div class="alt-table" id="sy-serie-t"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Répartition par type d'article</h3>
+      <div class="sub">Boissons, plats et chicha, en chiffre d'affaires net.</div>
+      <div class="chart-wrap"><canvas id="c-sy-type"></canvas></div>
+    </div>
+    <div class="card"><h3>Les dix catégories qui font le chiffre</h3>
+      <div class="sub">Part de chaque catégorie dans le chiffre d'affaires net.</div>
+      <div class="chart-wrap"><canvas id="c-sy-cat"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Ce que ce tableau de bord ne peut pas dire</h3>
+      <div class="sub">Les limites du jeu de données, et les écarts entre les
+        sources. Une page qui tait ses incohérences fait perdre la seule
+        occasion de s'apercevoir qu'un export est incomplet.</div></div>
+    </div>
+    <div id="sy-limites"></div>
+  </div>
+</section>
+
+<!-- ======================== ARTICLES OFFERTS ======================== -->
+<section class="page" id="page-offerts">
+  <div class="grid g4" id="of-kpi"></div>
+
+  <div id="of-constat"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Valeur offerte, nuit par nuit</h3>
+      <div class="sub">En regard du chiffre d'affaires net de la même nuit.
+        La ligne montre la part que les offerts représentent ce soir-là.</div></div>
+      <button class="mini" data-toggle="of-jour-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-of-jour"></canvas></div>
+    <div class="alt-table" id="of-jour-t"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Les quinze articles les plus offerts</h3>
+      <div class="sub">En valeur de vente — ce que ces articles auraient rapporté.</div>
+      <div class="chart-wrap l"><canvas id="c-of-article"></canvas></div>
+    </div>
+    <div class="card"><h3>Par catégorie</h3>
+      <div class="sub">Où part la générosité : quelles familles de produits.</div>
+      <div class="chart-wrap l"><canvas id="c-of-categorie"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Par caissier</h3>
+    <div class="sub">Valeur offerte rapportée au chiffre d'affaires réalisé par
+      chacun. Le rapport compte davantage que le montant : celui qui encaisse le
+      plus offre mécaniquement le plus.</div>
+    <div id="of-caissier"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Le détail, ligne à ligne</h3>
+      <div class="sub">Chaque article offert, avec son ticket. Taper dans le filtre
+        pour chercher un article, un caissier ou une date.</div></div>
+    </div>
+    <div id="of-detail"></div>
+  </div>
+</section>
+
+<!-- ======================== CHIFFRE D'AFFAIRES ====================== -->
+<section class="page" id="page-ventes">
+  <div class="grid g4" id="ve-kpi"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Chiffre d'affaires net par nuit</h3>
+      <div class="sub">Le brut moins les remises. Les nuits sans vente ne sont pas
+        tracées : l'établissement n'ouvre pas tous les jours.</div></div>
+      <button class="mini" data-toggle="ve-jour-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-ve-jour"></canvas></div>
+    <div class="alt-table" id="ve-jour-t"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Par mois</h3>
+      <div class="sub">Chiffre d'affaires net et nombre de nuits d'ouverture.</div>
+      <div class="chart-wrap"><canvas id="c-ve-mois"></canvas></div>
+    </div>
+    <div class="card"><h3>Par jour de la semaine</h3>
+      <div class="sub">Chiffre d'affaires net moyen par nuit d'ouverture — une
+        moyenne, pas un cumul : sinon les jours les plus fréquents gagneraient
+        toujours.</div>
+      <div class="chart-wrap"><canvas id="c-ve-semaine"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Le détail par nuit</h3>
+      <div class="sub">Brut, remises, net, et ce qui a été offert.</div></div>
+    </div>
+    <div id="ve-detail"></div>
+  </div>
+</section>
+
+<!-- ====================== CATEGORIES & PRODUITS ===================== -->
+<section class="page" id="page-explorer">
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3 id="ex-titre">Exploration</h3>
+      <div class="sub" id="ex-sub"></div></div>
+      <div id="ex-fil"></div>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-ex"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3 id="ex-table-titre">Détail</h3>
+      <div class="sub">Cliquer une ligne pour descendre d'un niveau.</div></div>
+    </div>
+    <div id="ex-table"></div>
+  </div>
+</section>
+
+<!-- ========================= TRANCHES HORAIRES ====================== -->
+<section class="page" id="page-horaires">
+  <div class="grid g4" id="ho-kpi"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Chiffre d'affaires par tranche horaire</h3>
+      <div class="sub">Axe ordonné selon la nuit : 14h à gauche, 13h à droite.
+        La soirée se lit d'un seul tenant, sans coupure à minuit.</div></div>
+      <button class="mini" data-toggle="ho-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-ho-ca"></canvas></div>
+    <div class="alt-table" id="ho-t"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Panier moyen par tranche</h3>
+      <div class="sub">Ce que dépense un client selon l'heure où il commande.</div>
+      <div class="chart-wrap"><canvas id="c-ho-panier"></canvas></div>
+    </div>
+    <div class="card"><h3>Nombre de ventes par tranche</h3>
+      <div class="sub">Volume d'opérations, à confronter au panier moyen ci-contre.</div>
+      <div class="chart-wrap"><canvas id="c-ho-ventes"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="foot" id="ho-note"></div>
+  </div>
+</section>
+
+<!-- ============================ CAISSIERS =========================== -->
+<section class="page" id="page-caissiers">
+  <div class="grid g4" id="ca-kpi"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Chiffre d'affaires par caissier</h3>
+    <div class="sub">Cumul sur toute la période — cette source ne porte pas de date.</div>
+    <div class="chart-wrap"><canvas id="c-ca-ca"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Le détail par caissier</h3>
+      <div class="sub">Tickets, panier moyen, ce qui a été encaissé et ce qui a
+        été offert.</div></div>
+    </div>
+    <div id="ca-table"></div>
+  </div>
+</section>
+
+<!-- =========================== REGLEMENTS =========================== -->
+<section class="page" id="page-reglements">
+  <div class="grid g4" id="re-kpi"></div>
+
+  <div id="re-constat"></div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Répartition des encaissements</h3>
+      <div class="sub">Part de chaque moyen de règlement dans le montant total.</div>
+      <div class="chart-wrap"><canvas id="c-re-part"></canvas></div>
+    </div>
+    <div class="card"><h3>Nombre d'opérations</h3>
+      <div class="sub">Combien de fois chaque moyen a été utilisé — à confronter
+        aux montants : un moyen peu utilisé peut peser lourd.</div>
+      <div class="chart-wrap"><canvas id="c-re-nb"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Le détail</h3>
+      <div class="sub">Cumul sur toute la période — cette source ne porte pas de date.</div></div>
+    </div>
+    <div id="re-table"></div>
+  </div>
+</section>
+
+<!-- ====================== COMPTE DE RESULTAT ======================
+     Cette page n'existait pas : les exports Infogest ne portent aucun
+     prix d'achat. Elle vient du classeur de suivi mensuel tenu par
+     l'exploitation, qui porte les decaissements et la paie.
+
+     Elle est NON FILTRABLE par la barre de periode : le classeur couvre
+     deux saisons separees par treize mois de fermeture, et la periode
+     par defaut -- celle de l'export de caisse -- masquerait entierement
+     la premiere. Chaque carte dit donc elle-meme ce qu'elle couvre.
+     ================================================================ -->
+<section class="page" id="page-resultat">
+  <div class="grid g4" id="cr-kpi"></div>
+
+  <div id="cr-constat"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Du chiffre d'affaires au résultat, mois par mois</h3>
+      <div class="sub">Les charges empilées sous la courbe du chiffre d'affaires :
+        l'écart visible entre le sommet de la pile et la courbe est le résultat du
+        mois. Le survol donne la part de chaque charge dans le chiffre du mois.</div></div>
+      <button class="mini" data-toggle="cr-cascade-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-cr-cascade"></canvas></div>
+    <div class="alt-table" id="cr-cascade-t"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Où va le chiffre d'affaires</h3>
+      <div class="sub">Structure des charges sur la saison en cours, en part du
+        total des charges.</div>
+      <div class="chart-wrap"><canvas id="c-cr-structure"></canvas></div>
+    </div>
+    <div class="card"><h3>Masse salariale par service</h3>
+      <div class="sub">Saison en cours. Aucun nom de personne ne sort du
+        classeur : la paie n'est publiée qu'agrégée par service.</div>
+      <div class="chart-wrap"><canvas id="c-cr-paie"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Taux de marge et rentabilité</h3>
+      <div class="sub">Deux ratios sur la même échelle, en pourcentage du chiffre
+        d'affaires du mois. Recalculés somme ÷ somme à chaque affichage, jamais
+        moyennés entre eux.</div></div>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-cr-taux"></canvas></div>
+    <div class="foot" id="cr-taux-note" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Compte de résultat mensuel</h3>
+      <div class="sub">Les vingt-deux mois exploités. Tapez une année ou un mois
+        pour ne garder que ces lignes.</div></div>
+    </div>
+    <div id="cr-table"></div>
+  </div>
+
+  <!-- Le detail des redressements vit dans la page « Ecarts &
+       controles », qui rassemble ceux des trois sources. Il n'est pas
+       repete ici : deux listes du meme sujet divergent des que l'une
+       est modifiee. Il reste un renvoi, pour qu'on ne lise pas ce
+       compte de resultat en croyant le classeur intact. -->
+  <div id="cr-renvoi"></div>
+</section>
+
+<!-- ========================== DEPENSES ============================ -->
+<section class="page" id="page-depenses">
+  <div class="grid g4" id="dp-kpi"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Les postes de dépense</h3>
+      <div class="sub">Cumul sur la saison en cours, du plus lourd au plus léger.
+        La part de chaque poste dans le total est écrite sur sa barre.</div></div>
+      <button class="mini" data-toggle="dp-postes-t">Voir les chiffres</button>
+    </div>
+    <!-- Vingt postes dans 330 px laissent 16 px par ligne : les
+         libelles se touchent et les barres les plus courtes ne se
+         distinguent plus de l'axe. La hauteur est donc posee ici, pour
+         ce graphique seul, plutot que d'elargir la classe partagee. -->
+    <div class="chart-wrap" style="height:520px"><canvas id="c-dp-postes"></canvas></div>
+    <div class="alt-table" id="dp-postes-t"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Évolution des sorties, mois par mois</h3>
+      <div class="sub">Achats matière, charges d'exploitation et investissements
+        empilés. Le fonds de caisse est exclu : c'est de la trésorerie déplacée,
+        pas une charge.</div></div>
+      <button class="mini" data-toggle="dp-mois-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-dp-mois"></canvas></div>
+    <div class="alt-table" id="dp-mois-t"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Détail des postes</h3>
+      <div class="sub">Chaque poste, chaque mois. Tapez « LOYERS », « 2026-07 »
+        ou « matière » pour ne garder que ces lignes.</div></div>
+    </div>
+    <div id="dp-table"></div>
+  </div>
+</section>
+
+<!-- ======================== RAPPROCHEMENT ========================= -->
+<section class="page" id="page-rapprochement">
+  <div class="grid g4" id="rp-kpi"></div>
+
+  <div id="rp-constat"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Déclaré par l'exploitation, enregistré par la caisse</h3>
+      <div class="sub">Deux mesures du même chiffre d'affaires, sur les mois où
+        les deux sources existent. Le survol donne l'écart en pourcentage.</div></div>
+      <button class="mini" data-toggle="rp-mois-t">Voir les chiffres</button>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-rp-mois"></canvas></div>
+    <div class="alt-table" id="rp-mois-t"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Par quel moyen l'argent entre</h3>
+      <div class="sub">Répartition des encaissements déclarés sur la saison en
+        cours. Les impayés clients sont comptés à part : ils sont déclarés au
+        chiffre d'affaires sans être encaissés.</div></div>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-rp-canaux"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Nuit par nuit</h3>
+      <div class="sub">Les deux sources face à face. Tapez « écart » pour ne garder
+        que les nuits où elles divergent, ou une date pour la retrouver.</div></div>
+    </div>
+    <div id="rp-table"></div>
+  </div>
+</section>
+
+<!-- ====================== ECARTS & CONTROLES =====================
+     Trois sources mesurent le meme etablissement et ne tombent pas
+     d'accord. Chacune de ces pages en montrait un morceau ; celle-ci
+     les rassemble, parce que la question « peut-on se fier a ces
+     chiffres ? » se pose une fois, pas trois.
+
+     Rien n'est calcule ici qui ne le soit ailleurs : cette page LIT les
+     memes controles que les autres. Recalculer donnerait deux reponses
+     possibles a la meme question.
+     =============================================================== -->
+<section class="page" id="page-ecarts">
+  <div class="grid g4" id="ec-kpi"></div>
+
+  <div id="ec-constat"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Entre les deux mesures du chiffre d'affaires</h3>
+      <div class="sub">Le classeur d'exploitation et la caisse comptent la même
+        chose et ne trouvent pas la même somme. Aucune des deux ne fait autorité
+        sur l'autre.</div></div>
+    </div>
+    <div id="ec-sources"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>À l'intérieur des exports de caisse</h3>
+      <div class="sub">Les exports Infogest se recoupent entre eux — sauf là où
+        ils ne se recoupent pas. Ces écarts sont dans les données d'origine, ils
+        ne viennent pas du traitement.</div></div>
+    </div>
+    <div id="ec-pos"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Dans le classeur d'exploitation</h3>
+      <div class="sub">Défauts de construction du classeur, relevés en lisant ses
+        formules et non les valeurs qu'il affiche. Ce tableau de bord les
+        contourne ; le classeur, lui, les porte toujours.</div></div>
+    </div>
+    <div id="ec-classeur"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Récapitulatif</h3>
+      <div class="sub">Tout ce qui précède, en une liste. Tapez « critique » pour
+        ne garder que ce qui doit être tranché avant d'utiliser un chiffre.</div></div>
+    </div>
+    <div id="ec-table"></div>
+  </div>
+</section>

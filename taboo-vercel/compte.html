@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>TABOO — Mon compte</title>
+
+<!-- =====================================================================
+     TABOO — Mon compte
+     ---------------------------------------------------------------------
+     POURQUOI CETTE PAGE EXISTE
+     --------------------------
+     Le formulaire de changement de mot de passe vivait dans /admin, que
+     le middleware refuse aux lecteurs. Autrement dit : les seules
+     personnes qui recevaient un mot de passe tire au sort par
+     l'administration etaient aussi les seules a ne pas pouvoir le
+     changer. On leur attribuait une suite de quatre mots, a vie.
+
+     Cette page est donc ouverte a TOUTE session valide, sans condition
+     de role. Le middleware la protege comme le reste -- pas de session,
+     pas de page -- mais ne regarde pas le role, puisqu'il n'y a rien
+     ici qui concerne quelqu'un d'autre que soi.
+
+     UN SEUL FORMULAIRE, PAS DEUX
+     ----------------------------
+     L'onglet « Mon mot de passe » a ete retire de /admin au profit de
+     cette page. Deux formulaires pour un meme geste, c'est deux
+     endroits ou corriger le prochain defaut, et un seul des deux qu'on
+     pense a corriger. L'administrateur passe par ici comme tout le
+     monde ; le lien est dans l'en-tete des deux autres pages.
+
+     api/session.js n'a pas bouge : il acceptait deja n'importe quelle
+     session et n'agit que sur `sess.i`, l'identifiant du cookie signe.
+     Personne ne peut donc changer le mot de passe d'un autre depuis
+     cette page, quel que soit ce qu'on poste.
+     ===================================================================== -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme:dark;
+    --fond:#001A20; --carte:#00232B; --bordure:#0E4351; --bordure-vive:#2C8598;
+    --accent:#004F5E; --accent-clair:#7FD9E8;
+    --texte:#EAF6F8; --doux:#9EC4CC; --faible:#6E939B;
+    --rouge:#d03b3b; --rouge-doux:#f0a0a0; --vert:#3ea87a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--texte);
+    font:14px/1.6 'Inter',system-ui,-apple-system,sans-serif}
+
+  /* Une seule gouttiere laterale, en padding-inline : un raccourci
+     `padding` remettrait les cotes a zero sur telephone. */
+  .enveloppe{max-width:620px;margin:0 auto;padding-inline:16px;
+    padding-block:0 48px}
+
+  header{border-bottom:1px solid var(--bordure);margin-bottom:24px;
+    padding-block:18px;display:flex;flex-wrap:wrap;gap:12px;
+    align-items:center;justify-content:space-between}
+  .marque{display:flex;align-items:center;gap:12px;min-width:0}
+  .marque .pastille{width:38px;height:38px;border-radius:4px;flex:0 0 auto;
+    background:var(--accent);display:flex;align-items:center;
+    justify-content:center;font-size:9px;font-weight:600;letter-spacing:1px}
+  .marque h1{font-size:14px;font-weight:600;letter-spacing:1.3px;margin:0;
+    text-transform:uppercase}
+  .marque .sub{color:var(--faible);font-size:11.5px;margin-top:1px}
+  .actions-entete{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+  .bloc{background:var(--carte);border:1px solid var(--bordure);
+    border-radius:6px;padding:20px;margin-bottom:18px}
+  .bloc h2{font-size:12px;font-weight:600;letter-spacing:1.1px;margin:0 0 16px;
+    text-transform:uppercase;color:var(--doux)}
+
+  dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:9px 18px;
+    font-size:13.5px}
+  dt{color:var(--faible);font-size:11.5px;letter-spacing:.3px;
+    text-transform:uppercase;align-self:center}
+  dd{margin:0;font-weight:500}
+
+  .etiquette{display:inline-block;padding:2px 7px;border-radius:3px;
+    font-size:10.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+  .et-admin{background:rgba(127,217,232,.15);color:var(--accent-clair)}
+  .et-lecteur{background:rgba(158,196,204,.1);color:var(--doux)}
+
+  label{display:block;font-size:11.5px;color:var(--faible);margin-bottom:5px;
+    letter-spacing:.3px}
+  input{background:#002A33;border:1px solid var(--bordure-vive);
+    color:var(--texte);padding:10px 12px;border-radius:4px;font:inherit;
+    font-size:15px;width:100%}
+  input:focus{outline:none;border-color:var(--accent-clair)}
+  .champ{margin-bottom:14px}
+
+  button.bouton{background:var(--accent);border:1px solid var(--bordure-vive);
+    color:var(--texte);padding:10px 16px;border-radius:4px;font:inherit;
+    font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  button.bouton:hover:not(:disabled){background:#0a6072}
+  button.bouton:disabled{opacity:.45;cursor:default}
+  button.mineur{background:transparent;border-color:var(--bordure);
+    color:var(--doux);font-weight:400;padding:6px 10px;font-size:12.5px}
+  button.mineur:hover:not(:disabled){background:#00303a;color:var(--texte)}
+  a.bouton-lien{text-decoration:none;display:inline-block}
+
+  .avis{padding:11px 13px;border-radius:4px;font-size:13px;margin-bottom:16px}
+  .avis-err{background:rgba(208,59,59,.14);border:1px solid var(--rouge);
+    color:var(--rouge-doux)}
+  .avis-ok{background:rgba(62,168,122,.13);border:1px solid var(--vert);
+    color:#a5dcc3}
+  .avis[hidden]{display:none}
+
+  .note{color:var(--faible);font-size:11.5px;line-height:1.65;margin:18px 0 0}
+
+  @media (max-width:520px){
+    .actions-entete{width:100%;justify-content:space-between}
+    .bloc{padding:16px}
+    dl{grid-template-columns:1fr;gap:3px 0}
+    dt{margin-top:8px}
+  }
+</style>
+</head>
+<body>
+<div class="enveloppe">
+
+  <header>
+    <div class="marque">
+      <div class="pastille">TABOO</div>
+      <div>
+        <h1>Mon compte</h1>
+        <div class="sub">Accès et mot de passe</div>
+      </div>
+    </div>
+    <div class="actions-entete">
+      <a class="bouton-lien" href="/"><button class="bouton mineur" type="button">Tableau de bord</button></a>
+      <a class="bouton-lien" id="lien-admin" href="/admin" hidden><button class="bouton mineur" type="button">Administration</button></a>
+      <button class="bouton mineur" type="button" id="deconnexion">Déconnexion</button>
+    </div>
+  </header>
+
+  <div class="bloc">
+    <h2>Identité</h2>
+    <dl>
+      <dt>Identifiant</dt><dd id="v-identifiant">—</dd>
+      <dt>Nom</dt><dd id="v-nom">—</dd>
+      <dt>Rôle</dt><dd id="v-role">—</dd>
+      <dt>Session</dt><dd id="v-session">—</dd>
+    </dl>
+  </div>
+
+  <div class="bloc">
+    <h2>Changer mon mot de passe</h2>
+
+    <div class="avis avis-err" id="err" hidden></div>
+    <div class="avis avis-ok"  id="ok"  hidden></div>
+
+    <form id="formulaire">
+      <div class="champ">
+        <label for="ancien">Mot de passe actuel</label>
+        <input type="password" id="ancien" autocomplete="current-password" required>
+      </div>
+      <div class="champ">
+        <label for="nouveau">Nouveau mot de passe</label>
+        <input type="password" id="nouveau" autocomplete="new-password"
+               minlength="12" required>
+      </div>
+      <div class="champ">
+        <label for="confirme">Confirmation</label>
+        <input type="password" id="confirme" autocomplete="new-password"
+               minlength="12" required>
+      </div>
+      <button class="bouton" type="submit">Changer</button>
+    </form>
+
+    <p class="note">
+      Douze caractères au minimum. La longueur compte davantage que les
+      symboles : quatre mots quelconques — <i>ardoise-bitume-clameur-dorure</i>
+      — résistent bien mieux qu'un <i>Motdepasse1!</i>, se retiennent, et se
+      dictent au téléphone sans épeler.
+      <br><br>
+      Changer votre mot de passe ferme vos sessions ouvertes ailleurs.
+      Celle-ci reste valide, vous n'avez pas à vous reconnecter.
+    </p>
+  </div>
+
+</div>
+
+<script type="module">
+/* Aucune decision n'est prise ici. Le serveur n'agit que sur le compte
+   du cookie signe : cette page ne peut pas en designer un autre, et
+   n'essaie pas. */
+
+const $ = (id) => document.getElementById(id);
+
+async function appeler(chemin, options = {}) {
+  const r = await fetch(chemin, {
+    credentials: 'same-origin',
+    headers: {'content-type': 'application/json'},
+    ...options,
+  });
+
+  /* 401 : la session est tombee. Le serveur efface le cookie en meme
+     temps qu'il refuse (voir lib/garde.js), donc le rechargement tombe
+     sur le formulaire de connexion -- et non dans la boucle que cette
+     page aurait sinon reproduite. */
+  if (r.status === 401) { location.reload(); throw new Error('session'); }
+
+  let corps = {};
+  try { corps = await r.json(); } catch { /* reponse sans JSON */ }
+  if (!r.ok) throw new Error(corps.erreur || `Erreur ${r.status}.`);
+  return corps;
+}
+
+/* ---------- Identite ---------- */
+
+function heure(epochSecondes) {
+  if (!Number.isFinite(epochSecondes)) return '—';
+  const d = new Date(epochSecondes * 1000);
+  const restant = Math.max(0, Math.round((d - Date.now()) / 60000));
+  const h = Math.floor(restant / 60), m = restant % 60;
+  const duree = h ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
+  return `expire dans ${duree} (${d.toLocaleTimeString('fr-FR',
+    {hour: '2-digit', minute: '2-digit'})})`;
+}
+
+async function charger() {
+  try {
+    const moi = await appeler('/api/session');
+
+    // textContent partout : le nom vient de la base, ou il a ete saisi a
+    // la main. Un « <img onerror> » place dans un nom s'executerait.
+    $('v-identifiant').textContent = moi.identifiant;
+    $('v-nom').textContent = moi.nom;
+    $('v-session').textContent = heure(moi.expire);
+
+    const et = document.createElement('span');
+    et.className = 'etiquette ' + (moi.role === 'admin' ? 'et-admin' : 'et-lecteur');
+    et.textContent = moi.role === 'admin' ? 'Administrateur' : 'Lecteur';
+    $('v-role').replaceChildren(et);
+
+    // Le lien vers /admin n'est montre qu'aux administrateurs. Ce n'est
+    // qu'une politesse : le middleware refuse la page aux autres, et
+    // api/admin.js refuse l'action. Cacher un lien ne protege rien.
+    $('lien-admin').hidden = moi.role !== 'admin';
+  } catch (e) {
+    if (e.message !== 'session') {
+      $('err').textContent = e.message;
+      $('err').hidden = false;
+    }
+  }
+}
+
+/* ---------- Changement ---------- */
+
+$('formulaire').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('err').hidden = true;
+  $('ok').hidden = true;
+
+  const nouveau = $('nouveau').value;
+  if (nouveau !== $('confirme').value) {
+    $('err').textContent = 'Les deux saisies diffèrent.';
+    $('err').hidden = false;
+    return;
+  }
+
+  const bouton = e.target.querySelector('button[type=submit]');
+  bouton.disabled = true;
+  try {
+    await appeler('/api/session', {method: 'POST', body: JSON.stringify({
+      action: 'changer_mdp', ancien: $('ancien').value, nouveau})});
+    e.target.reset();
+    $('ok').textContent = 'Mot de passe changé. Vos sessions ouvertes '
+                        + 'ailleurs ont été fermées.';
+    $('ok').hidden = false;
+    // L'expiration affichee date du cookie precedent : api/session.js en
+    // a pose un neuf, il faut relire pour ne pas afficher une echeance
+    // qui n'a plus cours.
+    await charger();
+  } catch (err) {
+    if (err.message !== 'session') {
+      $('err').textContent = err.message;
+      $('err').hidden = false;
+    }
+  } finally { bouton.disabled = false; }
+});
+
+/* ---------- Deconnexion ---------- */
+
+$('deconnexion').addEventListener('click', async () => {
+  try {
+    await appeler('/api/session',
+      {method: 'POST', body: JSON.stringify({action: 'deconnexion'})});
+  } catch { /* le cookie expirera de toute facon */ }
+  location.href = '/';
+});
+
+charger();
+</script>
+</body>
+</html>

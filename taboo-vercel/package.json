@@ -1,0 +1,11 @@
+{
+  "name": "taboo-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Tableau de bord TABOO, protege par middleware cote serveur",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0"
+  }
+}
