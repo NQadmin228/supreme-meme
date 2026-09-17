@@ -1631,6 +1631,12 @@ RENDER['couts'] = function(){
         rapproche un champagne nommé sans qualificatif de son brut, et seulement
         s'il n'existe qu'un seul candidat. « Préfixe unique » rapproche un nom au
         seul produit costé qui le prolonge ; s'il y en a deux, la règle se tait.
+        « Nom entre parenthèses » rapproche un article de l'unique produit costé
+        qui le contient comme mot entier — « OLMECA » dans « TEQUILA (OLMECA) ».
+        « Famille au coût uniforme » n'intervient que là où le référentiel coste
+        identiquement tous les produits d'une famille : les sept chichas de TABOO
+        valent le même montant quelle que soit leur saveur, le coût ne dépend pas
+        du parfum. La règle exige l'unanimité et au moins trois produits.
         « Vendu au verre » s'applique quand le prix révèle que l'unité de vente
         n'est pas la bouteille : le coût est alors divisé par
         ${F(m.verres_par_bouteille)}, nombre de verres par bouteille indiqué par

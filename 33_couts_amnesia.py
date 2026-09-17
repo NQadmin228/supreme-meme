@@ -112,6 +112,16 @@ QUALIFICATIF_DEFAUT = {"BRUT"}
 # marges se recalculent.
 VERRES_PAR_BOUTEILLE = 12
 
+# Les deux caisses ne nomment pas toujours une famille pareil. Cette
+# table est courte et explicite a dessein : rapprocher des familles par
+# ressemblance ferait entrer un cout de vin dans une marge de biere.
+# Elle ne sert qu'a la regle du cout uniforme, qui ne s'applique elle-meme
+# qu'a des familles ou TOUS les produits costes portent le meme montant.
+FAMILLES_EQUIVALENTES = {
+    "COCKTAILS": "COCKTAILS ALCOOLISES",
+    "MOCKTAILS": "COCKTAILS NON ALCOOLISES",
+}
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -163,6 +173,25 @@ def principal():
         if cle and cle not in couts and num(x.get("cout_revient")):
             couts[cle] = x
 
+    # Les familles dont TOUS les produits costes portent le meme cout.
+    # Chez TABOO, les sept chichas du referentiel coutent 960 quelle que
+    # soit leur saveur : le cout ne depend pas du parfum, c'est le modele
+    # de TABOO lui-meme qui le dit. Appliquer ce montant a une saveur
+    # qu'AMNESIA vend et que TABOO ne vend pas n'ajoute aucune hypothese.
+    #
+    # La regle exige l'UNANIMITE et au moins trois produits : deux
+    # produits au meme prix est une coincidence, sept une politique.
+    par_famille = collections.defaultdict(list)
+    for x in lignes:
+        cr = num(x.get("cout_revient"))
+        if cr:
+            par_famille[base_nom(x.get("categorie"))].append((cr, x))
+    cout_uniforme = {}
+    for fam, items in par_famille.items():
+        montants = {c for c, _ in items}
+        if len(items) >= 3 and len(montants) == 1:
+            cout_uniforme[fam] = items[0][1]
+
     amnesia = json.loads(SOURCE_AMNESIA.read_text(encoding="utf-8"))
     vendus = collections.defaultdict(
         lambda: {"q": 0, "qo": 0, "net": 0.0, "brut": 0.0, "remise": 0.0})
@@ -175,7 +204,7 @@ def principal():
         e["remise"] += r.get("remise", 0)
     ca_total = sum(v["net"] for v in vendus.values())
 
-    def candidats(nom):
+    def candidats(nom, categorie):
         """Les appariements possibles, du plus sur au moins sur."""
         k = base_nom(nom)
         if k in couts:
@@ -187,10 +216,26 @@ def principal():
         elif len(plus_longs) == 1:
             yield couts[plus_longs[0]], "préfixe unique"
 
+        # Le referentiel ecrit parfois la marque entre parentheses, la ou
+        # la caisse ne garde qu'elle : « OLMECA BTL » d'un cote,
+        # « TEQUILA (OLMECA) » de l'autre. Le nom doit former un mot
+        # entier du produit coste, et n'y apparaitre qu'une fois.
+        if k:
+            dedans = [c for c in couts
+                      if k != c and (" " + k + " ") in (" " + c + " ")]
+            if len(dedans) == 1:
+                yield couts[dedans[0]], "nom entre parenthèses"
+
+        # Enfin, la famille au cout uniforme.
+        fam = base_nom(categorie)
+        fam = FAMILLES_EQUIVALENTES.get(fam, fam)
+        if fam in cout_uniforme:
+            yield cout_uniforme[fam], "famille au coût uniforme"
+
     articles, rejetes, absents = [], [], []
     for (t, c, a), v in vendus.items():
         retenu = rejet = None
-        for cout, regle in candidats(a):
+        for cout, regle in candidats(a, c):
             pv = num(cout.get("prix_vente"))
             rapport = ((v["net"] / v["q"]) / pv) if (pv and v["q"]) else None
             if rapport is None or PRIX_MIN <= rapport <= PRIX_MAX:
@@ -287,7 +332,8 @@ def principal():
             "cout_offert": sum(x["co"] for x in articles),
             "regles": [{"regle": r, "n": par_regle[r], "ca": ca_regle[r]}
                        for r in ("nom identique", "variante par défaut",
-                                 "préfixe unique", "vendu au verre")
+                                 "préfixe unique", "nom entre parenthèses",
+                                 "famille au coût uniforme", "vendu au verre")
                        if par_regle[r]],
             "verres_par_bouteille": VERRES_PAR_BOUTEILLE,
             "rejetes": len(rejetes),
