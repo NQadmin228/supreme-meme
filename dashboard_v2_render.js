@@ -51,15 +51,26 @@ RENDER['synthese'] = function(){
   const valOfferte = sum(off,'v');
   const nJours = new Set(rows.map(r=>r.d)).size;
 
+  /* Les quatre tuiles sont les quatre etages d'une meme cascade. Elles
+     partagent donc le MEME denominateur -- le chiffre d'affaires net --
+     et leurs barres se lisent les unes contre les autres : on voit
+     fondre le franc encaisse d'un etage a l'autre sans lire un seul
+     pourcentage. La premiere porte la sienne sur le chiffre BRUT, ce
+     qui met les remises a la meme echelle que le reste. */
   document.getElementById('sy-kpi').innerHTML = [
     tuile({k:"CHIFFRE D'AFFAIRES NET", v:Fc(t.cn), u:'F', hero:true, cls:'accent',
-           d:`${F(t.cn)} F exactement<br>après ${F(t.rm)} F de remises · ${F(nJours)} nuits`}),
+           part:{v:t.cn, total:t.cb, c:'var(--accent)'},
+           d:`<strong>${P1(t.cn,t.cb)}</strong> du CA brut · ${F(t.cn)} F exactement<br>après ${F(t.rm)} F de remises · ${F(nJours)} nuits`}),
     tuile({k:'MARGE BRUTE', v:Fc(t.mb), u:'F', hero:true,
+           part:{v:t.mb, total:t.cn, c:'var(--accent)'},
            d:`${F(t.mb)} F · <strong>${P1(t.mb,t.cn)}</strong> du CA net<br>après achats de marchandises`}),
     tuile({k:"RÉSULTAT D'EXPLOITATION", v:Fc(t.re), u:'F', hero:true,
+           part:{v:Math.max(0,t.re), total:t.cn, c:'var(--st-warn)'},
            d:`${F(t.re)} F · <strong>${P1(t.re,t.cn)}</strong> du CA net<br>après charges d'exploitation`}),
     tuile({k:'RÉSULTAT NET', v:Fc(t.rn), u:'F', hero:true,
            cls:t.rn>0?'good':'crit',
+           part:{v:Math.abs(t.rn), total:t.cn,
+                 c:t.rn>0?'var(--st-good)':'var(--st-crit)'},
            d:`${F(t.rn)} F · <strong>${P1(t.rn,t.cn)}</strong> du CA net<br>après investissements`}),
   ].join('');
 
@@ -169,15 +180,20 @@ RENDER['synthese'] = function(){
       scales:{y:axisY(v=>F(v)+' %'), x:axisX()}}});
 
   /* --- parts et contributions --- */
-  setChart('c-sy-part', {type:'doughnut',
-    data:{labels:ACT, datasets:[{data:parAct.map(x=>x.cn),
-      backgroundColor:ACT.map(a=>C[a]), borderWidth:2, borderColor:C.surface}]},
-    options:{cutout:'56%', plugins:{
-      legend:{position:'right', labels:{color:C.dim, boxWidth:9, boxHeight:9,
-        usePointStyle:true, pointStyle:'rectRounded', padding:11}},
-      tooltip:Object.assign({},TOOLTIP,{callbacks:{
-        label:c=>' '+c.label+' : '+FCFA(c.parsed)+' ('+F1(PCT(c.parsed,t.cn))+' %)'}})}},
-    plugins:[pctAnneau()]});
+  /* Une ligne a l'echelle, et non un anneau : la part s'ecrit dans le
+     segment au lieu d'attendre un survol, et la figure se compare
+     directement a celle de la marge, juste en dessous -- ce que deux
+     anneaux ne permettaient pas. */
+  document.getElementById('sy-part').innerHTML =
+    `<div class="foot" style="margin-bottom:7px">Chiffre d'affaires net —
+       ${FCFA(t.cn)}</div>`
+    + barreComposition(parAct.map(x => ({l:x.a, v:x.cn, c:C[x.a]})))
+    + `<div class="foot" style="margin:18px 0 7px">Marge brute dégagée —
+       ${FCFA(t.mb)}</div>`
+    + barreComposition(parAct.map(x => ({l:x.a, v:Math.max(0, x.mb), c:C[x.a]})))
+    + `<div class="foot" style="margin-top:16px">Une activité plus large en bas
+       qu'en haut rapporte plus qu'elle ne pèse ; plus étroite, elle fait du
+       chiffre sans faire de marge.</div>`;
 
   barHorizontale('c-sy-contrib', ACT, parAct.map(x=>x.mb), ACT.map(a=>C[a]));
 
@@ -201,10 +217,17 @@ RENDER['resultat'] = function(){
   const rows = resPeriode(), t = totauxRes();
 
   document.getElementById('re-kpi').innerHTML = [
-    tuile({k:'CA NET', v:Fc(t.cn), u:'F', d:F(t.cn)+' F exactement'}),
-    tuile({k:'MARGE BRUTE', v:P1(t.mb,t.cn), d:F(t.mb)+' F'}),
-    tuile({k:"TAUX DE RENTABILITÉ D'EXPLOITATION", v:P1(t.re,t.cn), d:F(t.re)+' F'}),
-    tuile({k:'RÉSULTAT NET', v:P1(t.rn,t.cn), cls:'accent', d:F(t.rn)+' F'}),
+    tuile({k:'CA NET', v:Fc(t.cn), u:'F', part:{v:t.cn, total:t.cb, c:'var(--accent)'},
+           d:P1(t.cn,t.cb)+' du CA brut · '+F(t.cn)+' F exactement'}),
+    tuile({k:'MARGE BRUTE', v:P1(t.mb,t.cn), part:{v:t.mb, total:t.cn, c:'var(--accent)'},
+           d:F(t.mb)+' F sur '+F(t.cn)+' F de CA net'}),
+    tuile({k:"TAUX DE RENTABILITÉ D'EXPLOITATION", v:P1(t.re,t.cn),
+           part:{v:Math.max(0,t.re), total:t.cn, c:'var(--st-warn)'},
+           d:F(t.re)+' F — après charges, avant investissements'}),
+    tuile({k:'RÉSULTAT NET', v:P1(t.rn,t.cn), cls:'accent',
+           part:{v:Math.abs(t.rn), total:t.cn,
+                 c:t.rn>0?'var(--st-good)':'var(--st-crit)'},
+           d:F(t.rn)+' F — ce qui reste de chaque franc encaissé'}),
   ].join('');
 
   const lignes = [
@@ -236,15 +259,14 @@ RENDER['resultat'] = function(){
     ['Investissements', t.cx, C.seq[6]],
     ['Résultat net', t.rn, C.good],
   ].filter(p=>p[1]>0);
-  setChart('c-re-struct', {type:'doughnut',
-    data:{labels:parts.map(p=>p[0]), datasets:[{data:parts.map(p=>p[1]),
-      backgroundColor:parts.map(p=>p[2]), borderWidth:2, borderColor:C.surface}]},
-    options:{cutout:'52%', plugins:{
-      legend:{position:'bottom', labels:{color:C.dim, boxWidth:9, boxHeight:9,
-        usePointStyle:true, pointStyle:'rectRounded', padding:10, font:{size:11}}},
-      tooltip:Object.assign({},TOOLTIP,{callbacks:{
-        label:c=>' '+c.label+' : '+FCFA(c.parsed)+' ('+F1(PCT(c.parsed,t.cn))+' % du CA net)'}})}},
-    plugins:[pctAnneau()]});
+  /* La ligne entiere vaut le chiffre d'affaires net : chaque segment se
+     lit donc directement en part du CA, sans rapporter mentalement a un
+     total de charges qui n'est pas la question posee ici. */
+  document.getElementById('re-struct').innerHTML =
+    barreComposition(parts.map(p => ({l:p[0], v:p[1], c:p[2]})))
+    + `<div class="foot" style="margin-top:14px">La ligne entière vaut le chiffre
+       d'affaires net — ${FCFA(t.cn)}. Chaque part se lit donc sur le franc
+       encaissé, et le dernier segment est ce qui reste.</div>`;
 
   /* --- composition mensuelle empilee --- */
   const pm = parMois(rows, ['cn','ae','op','cx','rn']);
@@ -384,10 +406,12 @@ RENDER['explorer'] = function(){
 
   document.getElementById('ex-kpi').innerHTML = [
     tuile({k:'CA NET', v:Fc(tot.cn), u:'F', cls:'accent', hero:true,
+           part:{v:tot.cn, total:totGeneral, c:'var(--accent)'},
            d:`${F(tot.cn)} F · <strong>${F1(PCT(tot.cn, totGeneral))} %</strong> du CA de la période`}),
     tuile({k:'QUANTITÉ VENDUE', v:F(tot.q), u:'unités',
            d:`prix moyen ${F(tot.cn/(tot.q||1))} F`}),
     tuile({k:'REMISES', v:Fc(tot.rm), u:'F',
+           part:{v:tot.rm, total:tot.cb, c:'var(--st-warn)'},
            d:`${F1(PCT(tot.rm, tot.cb))} % du CA brut du périmètre`}),
     tuile({k:nomCompte.toUpperCase(),
            v:F(nbEnfants),
@@ -520,14 +544,25 @@ RENDER['ventes'] = function(){
   const totArtCn = sum(arts,'cn');
 
   document.getElementById('ve-kpi').innerHTML = [
-    tuile({k:'CA NET', v:Fc(t.cn), u:'F', d:F(t.cn)+' F'}),
+    tuile({k:'CA NET', v:Fc(t.cn), u:'F', part:{v:t.cn, total:t.cb, c:'var(--accent)'},
+           d:P1(t.cn,t.cb)+' du CA brut · '+F(t.cn)+' F'}),
     tuile({k:'ARTICLES VENDUS', v:F(t.qv), u:'unités',
-           d:F(t.qo)+' offerts en plus'}),
+           part:{v:t.qv, total:t.qv + t.qo, c:'var(--accent-mark)'},
+           d:F(t.qo)+' offerts en plus, soit '+F1(PCT(t.qo, t.qv + t.qo))
+             +' % de ce qui sort'}),
     tuile({k:'PRIX MOYEN PAR ARTICLE', v:F(t.cn/(t.qv||1)), u:'F',
            d:'CA net ÷ quantité vendue'}),
+    /* La barre dit ici l'inverse de ce que dit le chiffre : une barre
+       courte est une concentration FORTE, et c'est bien ce qu'on veut
+       voir -- une poignee de references qui portent quatre cinquiemes
+       du chiffre. */
     tuile({k:'CONCENTRATION', v:F(DATA.pareto.n_articles_80pct), u:'articles',
            cls:'warn',
-           d:`font 80 % du CA, sur ${F(DATA.pareto.n_articles_total)} référencés`}),
+           part:{v:DATA.pareto.n_articles_80pct,
+                 total:DATA.pareto.n_articles_total, c:'var(--st-warn)'},
+           d:`font 80 % du CA — soit ${F1(PCT(DATA.pareto.n_articles_80pct,
+              DATA.pareto.n_articles_total))} % des ${F(DATA.pareto.n_articles_total)}
+              références`}),
   ].join('');
 
   /* --- courbe de concentration (Pareto sans double axe) --- */
@@ -670,9 +705,11 @@ RENDER['horaires'] = function(){
 
   document.getElementById('ho-kpi').innerHTML = [
     tuile({k:'PART DU CA ENTRE 22H ET 6H', v:F1(PCT(nuit,totH)), u:'%', cls:'accent',
-           d:"l'établissement est un lieu de nuit, pas un restaurant de midi"}),
+           part:{v:nuit, total:totH, c:'var(--accent)'},
+           d:FCFA(nuit)+" sur "+FCFA(totH)+" — l'établissement est un lieu de nuit, pas un restaurant de midi"}),
     tuile({k:'TRANCHE LA PLUS FORTE', v:hMax+'h – '+((hMax+1)%24)+'h',
-           d:FCFA(vMax)+' sur la période'}),
+           part:{v:vMax, total:totH, c:'var(--accent-mark)'},
+           d:F1(PCT(vMax,totH))+' % du chiffre à elle seule — '+FCFA(vMax)}),
     tuile({k:'PANIER MOYEN DE RÉFÉRENCE', v:F(DATA.totaux_pos.panier_moyen), u:'F',
            d:F(DATA.totaux_pos.nb_panier)+' paniers sur la période complète'}),
     tuile({k:'NUITS D’EXPLOITATION', v:F(new Set(h.map(r=>r.d)).size),
@@ -773,13 +810,20 @@ RENDER['reglements'] = function(){
     dateLabel(DATA.meta.periode_debut)+' au '+dateLabel(DATA.meta.periode_fin);
 
   document.getElementById('rg-kpi').innerHTML = [
+    /* Quatre parts du meme total : les quatre barres s'additionnent a
+       l'oeil, et ce qui manque pour faire la ligne entiere est le reste
+       des moyens. */
     tuile({k:'ESPÈCES', v:F1(PCT(especes,tot)), u:'%', cls:'warn', hero:true,
+           part:{v:especes, total:tot, c:'var(--st-warn)'},
            d:F(especes)+' F sur '+F(get('ESPECES').nombre)+' opérations'}),
     tuile({k:'MOBILE MONEY', v:F1(PCT(mobile,tot)), u:'%',
+           part:{v:mobile, total:tot, c:'var(--accent-mark)'},
            d:'FLOOZ, TMONEY, GOZEM — '+F(mobile)+' F'}),
     tuile({k:'CARTE BANCAIRE', v:F1(PCT(carte,tot)), u:'%',
+           part:{v:carte, total:tot, c:'var(--accent-mark)'},
            d:F(carte)+' F sur '+F(get('CB').nombre)+' opérations'}),
     tuile({k:'VENTES À CRÉDIT', v:F(credit), u:'F', cls:'crit',
+           part:{v:credit, total:tot, c:'var(--st-crit)'},
            d:F1(PCT(credit,tot))+' des règlements · '+F(get('Crédit').nombre)+' tickets'}),
   ].join('');
 
@@ -855,11 +899,20 @@ RENDER['marge'] = function(){
       que les recettes, elles, impliquent une marge bien supérieure.
     </div>`;
 
+  /* Un taux sans le poids de son assiette n'est pas une information :
+     soixante pour cent de marge sur deux pour cent du chiffre ne pesent
+     pas ce que pesent quarante pour cent sur soixante-dix. La barre
+     porte donc le TAUX -- c'est le chiffre affiche -- et la ligne de
+     detail ouvre sur le poids de l'activite, qui manquait. */
+  const cnTotAct = parAct.reduce((a, x) => a + x.cn, 0);
   document.getElementById('ma-kpi').innerHTML = parAct.map(x=>tuile({
     k:x.a, v:F1(x.taux)+' %', hero:true,
     cls:x.taux<35?'crit':(x.taux<50?'warn':'good'),
-    d:`marge brute · CA net ${Fc(x.cn)} F · achats ${Fc(x.ae)} F<br>
-       coût matière ${F1(x.cout)} %`
+    part:{v:Math.max(0, x.taux), total:100,
+          c:x.taux<35?'var(--st-crit)':(x.taux<50?'var(--st-warn)':'var(--st-good)')},
+    d:`<strong>${F1(PCT(x.cn, cnTotAct))} %</strong> du chiffre d'affaires ·
+       CA net ${Fc(x.cn)} F<br>
+       achats ${Fc(x.ae)} F — coût matière ${F1(x.cout)} %`
   })).join('');
 
   /* --- composition CA net = achats + marge --- */
@@ -943,14 +996,21 @@ RENDER['cout-revient'] = function(){
 
   document.getElementById('cr-kpi').innerHTML = [
     tuile({k:'CA COUVERT PAR UN COÛT DE RECETTE', v:Fc(cnCouvert), u:'F',
-           d:F1(PCT(cnCouvert,totCn))+' % du CA total'}),
+           part:{v:cnCouvert, total:totCn, c:'var(--st-warn)'},
+           d:F1(PCT(cnCouvert,totCn))+' % du CA total — tout ce qui suit ne '
+             +'porte que sur cette part'}),
     tuile({k:'COÛT DE RECETTE CUMULÉ', v:Fc(coutTot), u:'F',
+           part:{v:coutTot, total:cnCouvert, c:'var(--st-serious)'},
            d:F1(PCT(coutTot,cnCouvert))+' % du CA couvert'}),
     tuile({k:'MARGE THÉORIQUE', v:F1(PCT(margeTheo,cnCouvert)), u:'%', cls:'accent', hero:true,
+           part:{v:margeTheo, total:cnCouvert, c:'var(--accent)'},
            d:F(margeTheo)+' F sur le périmètre couvert'}),
     tuile({k:'RECETTES COMPLÈTES', v:F(complets)+' / '+F(CR.length),
            cls:complets<CR.length?'warn':'good',
-           d:`une recette incomplète sous-évalue son coût, donc surévalue sa marge.
+           part:{v:complets, total:CR.length || 1,
+                 c:complets<CR.length?'var(--st-warn)':'var(--st-good)'},
+           d:`${F1(PCT(complets, CR.length))} % des recettes. Une recette
+              incomplète sous-évalue son coût, donc surévalue sa marge —
               ${F(completsEat)} des ${F(nEat)} recettes de cuisine sont complètes`}),
   ].join('');
 
@@ -1085,14 +1145,27 @@ RENDER['depenses'] = function(){
   const parNature = groupBy(dep, r=>r.n, ['m']);
   const nat = n => (parNature.get(n)||{m:0}).m;
 
+  /* Les quatre barres partagent le chiffre d'affaires net : la premiere
+     est la somme des trois autres, et l'ecart entre elle et la ligne
+     pleine est ce qui reste. Rapporter les natures au TOTAL DES
+     DEPENSES aurait donne trois parts faisant cent pour cent d'
+     elles-memes -- vrai, et sans interet. */
   document.getElementById('de-kpi').innerHTML = [
-    tuile({k:'DÉPENSES TOTALES', v:Fc(tot), u:'F', d:F(tot)+' F · '+F1(PCT(tot,t.cn))+' % du CA net'}),
+    tuile({k:'DÉPENSES TOTALES', v:Fc(tot), u:'F',
+           part:{v:tot, total:t.cn, c:'var(--st-warn)'},
+           d:F(tot)+' F · '+F1(PCT(tot,t.cn))+' % du CA net'}),
     tuile({k:'ACHATS DE MARCHANDISES', v:Fc(nat('ACHATS EXTERNES')), u:'F',
-           d:F1(PCT(nat('ACHATS EXTERNES'),t.cn))+' % du CA net'}),
+           part:{v:nat('ACHATS EXTERNES'), total:t.cn, c:'var(--st-serious)'},
+           d:F1(PCT(nat('ACHATS EXTERNES'),t.cn))+' % du CA net · '
+             +F1(PCT(nat('ACHATS EXTERNES'),tot))+' % des dépenses'}),
     tuile({k:"CHARGES D'EXPLOITATION", v:Fc(nat('OPEX')), u:'F',
-           d:F1(PCT(nat('OPEX'),t.cn))+' % du CA net'}),
+           part:{v:nat('OPEX'), total:t.cn, c:'var(--st-warn)'},
+           d:F1(PCT(nat('OPEX'),t.cn))+' % du CA net · '
+             +F1(PCT(nat('OPEX'),tot))+' % des dépenses'}),
     tuile({k:'INVESTISSEMENTS', v:Fc(nat('CAPEX')), u:'F',
-           d:F1(PCT(nat('CAPEX'),t.cn))+" % du CA net · traités en charge de l'exercice"}),
+           part:{v:nat('CAPEX'), total:t.cn, c:'var(--seq-7)'},
+           d:F1(PCT(nat('CAPEX'),t.cn))+' % du CA net · '
+             +F1(PCT(nat('CAPEX'),tot))+" % des dépenses · traités en charge"}),
   ].join('');
 
   const NATCOUL = {'ACHATS EXTERNES':C.serious, 'OPEX':C.warn, 'CAPEX':C.seq[6]};
@@ -1119,17 +1192,20 @@ RENDER['depenses'] = function(){
     postes.map(x=>[x.p, x.n, F(x.m), F1(PCT(x.m,tot))+' %', F1(PCT(x.m,t.cn))+' %']));
 
   const natsOrd = ['ACHATS EXTERNES','OPEX','CAPEX'].filter(n=>nat(n)>0);
-  setChart('c-de-nature', {type:'doughnut',
-    data:{labels:natsOrd.map(n=>n==='OPEX'?"Charges d'exploitation":
-      (n==='CAPEX'?'Investissements':'Achats de marchandises')),
-      datasets:[{data:natsOrd.map(n=>nat(n)),
-        backgroundColor:natsOrd.map(n=>NATCOUL[n]), borderWidth:2, borderColor:C.surface}]},
-    options:{cutout:'54%', plugins:{
-      legend:{position:'bottom', labels:{color:C.dim, boxWidth:9, boxHeight:9,
-        usePointStyle:true, pointStyle:'rectRounded', padding:9, font:{size:10.5}}},
-      tooltip:Object.assign({},TOOLTIP,{callbacks:{
-        label:c=>' '+FCFA(c.parsed)+' ('+F1(PCT(c.parsed,tot))+' %)'}})}},
-    plugins:[pctAnneau()]});
+  const nomNat = n => n==='OPEX' ? "Charges d'exploitation"
+    : (n==='CAPEX' ? 'Investissements' : 'Achats de marchandises');
+  /* Deux lignes plutot qu'un anneau. La premiere partage les depenses
+     entre elles, la seconde les pose sur le chiffre d'affaires net --
+     ou le dernier segment est ce qui reste. Un anneau ne peut montrer
+     que la premiere, et c'est la seconde qu'on cherche. */
+  document.getElementById('de-nature').innerHTML =
+    `<div class="foot" style="margin-bottom:7px">Entre elles —
+       ${FCFA(tot)} de dépenses</div>`
+    + barreComposition(natsOrd.map(n => ({l:nomNat(n), v:nat(n), c:NATCOUL[n]})))
+    + `<div class="foot" style="margin:18px 0 7px">Sur le chiffre d'affaires net —
+       ${FCFA(t.cn)}</div>`
+    + barreComposition(natsOrd.map(n => ({l:nomNat(n), v:nat(n), c:NATCOUL[n]}))
+        .concat(t.cn > tot ? [{l:'Ce qui reste', v:t.cn - tot, c:C.faint}] : []));
 
   const opex = postes.filter(x=>x.n==='OPEX').slice(0,10);
   barHorizontale('c-de-opex', opex.map(x=>x.p), opex.map(x=>x.m), C.warn);
@@ -1176,13 +1252,20 @@ RENDER['commercial'] = function(){
     </div>`;
 
   document.getElementById('co-kpi').innerHTML = [
+    /* Les deux premieres barres partagent le CA potentiel : remises et
+       offerts s'additionnent a l'oeil pour donner la troisieme. */
     tuile({k:'REMISES ACCORDÉES', v:Fc(t.rm), u:'F',
-           d:F1(PCT(t.rm,t.cb))+' % du CA brut'}),
+           part:{v:t.rm, total:potentiel, c:'var(--st-warn)'},
+           d:F1(PCT(t.rm,t.cb))+' % du CA brut · '
+             +F1(PCT(t.rm,potentiel))+' % du potentiel'}),
     tuile({k:'VALEUR DES ARTICLES OFFERTS', v:Fc(valOff), u:'F', cls:'warn',
-           d:F(qteOff)+' unités offertes'}),
+           part:{v:valOff, total:potentiel, c:'var(--st-warn)'},
+           d:F(qteOff)+' unités · '+F1(PCT(valOff,potentiel))+' % du potentiel'}),
     tuile({k:'EFFORT COMMERCIAL TOTAL', v:F1(PCT(effort,potentiel)), u:'%', cls:'warn', hero:true,
+           part:{v:effort, total:potentiel, c:'var(--st-warn)'},
            d:F(effort)+' F sur un CA potentiel de '+Fc(potentiel)+' F'}),
     tuile({k:'PART DE LA MARGE BRUTE CONSOMMÉE', v:F1(PCT(effort,t.mb)), u:'%',
+           part:{v:Math.min(effort, t.mb), total:t.mb, c:'var(--st-crit)'},
            d:'marge brute de la période : '+Fc(t.mb)+' F'}),
   ].join('');
 
@@ -1283,12 +1366,16 @@ RENDER['stock'] = function(){
 
   document.getElementById('st-kpi').innerHTML = [
     tuile({k:'ARTICLES SUIVIS EN STOCK', v:F(INV.length),
-           d:F(valorises.length)+' avec un coût de revient connu'}),
+           part:{v:valorises.length, total:INV.length || 1, c:'var(--accent)'},
+           d:F(valorises.length)+' avec un coût de revient connu, soit '
+             +F1(PCT(valorises.length, INV.length))+' %'}),
     tuile({k:'STOCK THÉORIQUE VALORISÉ', v:Fc(valTot), u:'F',
            d:'au coût de revient · périmètre partiel'}),
     tuile({k:'ARTICLES SOUS SEUIL D’ALERTE', v:F(sousAlerte.length),
            cls:sousAlerte.length?'warn':'good',
-           d:'stock théorique ≤ seuil paramétré'}),
+           part:{v:sousAlerte.length, total:INV.length || 1, c:'var(--st-warn)'},
+           d:F1(PCT(sousAlerte.length, INV.length))
+             +' % des articles suivis · stock théorique ≤ seuil paramétré'}),
     tuile({k:'COMPTAGE PHYSIQUE', v:meta.comptage_saisi?'Saisi':'Absent',
            cls:meta.comptage_saisi?'good':'crit',
            d:meta.comptage_saisi?'démarque exploitable':'démarque non mesurable'}),
@@ -1335,10 +1422,22 @@ RENDER['caisse'] = function(){
   document.getElementById('ca-kpi').innerHTML = [
     tuile({k:'CAISSIERS DANS L’EXPORT', v:F(K.length), d:'utilisateurs distincts'}),
     tuile({k:'CA CUMULÉ DE L’EXPORT', v:Fc(totHT), u:'F',
-           d:F1(PCT(totHT,caTotal))+' % du CA net total'}),
-    tuile({k:'TICKETS', v:F(totTickets), d:'sur le périmètre de l’export'}),
+           part:{v:totHT, total:caTotal, c:'var(--st-warn)'},
+           d:F1(PCT(totHT,caTotal))+' % du CA net total — le reste est hors export'}),
+    tuile({k:'TICKETS', v:F(totTickets),
+           d:F(totHT/(totTickets||1))+' F par ticket en moyenne — la référence '
+             +'de la colonne panier'}),
+    /* Un « meilleur panier moyen » sans terme de comparaison ne dit pas
+       s'il sort du lot ou s'il frole la moyenne. L'indice le dit :
+       100 = le panier moyen de l'export. */
     tuile({k:'MEILLEUR PANIER MOYEN', v:meilleur?meilleur.utilisateur:'—',
-           cls:'accent', d:meilleur?F(val(meilleur,'Panier Moyen'))+' F par ticket':''}),
+           cls:'accent',
+           d:meilleur
+             ? F(val(meilleur,'Panier Moyen'))+' F par ticket — '
+               +F(totTickets && totHT
+                  ? 100*val(meilleur,'Panier Moyen')/(totHT/totTickets) : 0)
+               +' contre 100 pour un panier ordinaire'
+             : ''}),
   ].join('');
 
   const triCa = [...K].sort((a,b)=>val(b,'Total HT')-val(a,'Total HT'));
@@ -1358,7 +1457,15 @@ RENDER['caisse'] = function(){
                   ' '+F(val(k,'Nbre de ticket'))+' tickets',
                   ' CA : '+FCFA(val(k,'Total HT'))];}}})},
       scales:{x:axisY(), y:{grid:{display:false}, border:{color:C.axis},
-        ticks:{color:C.dim, autoSkip:false}}}}});
+        ticks:{color:C.dim, autoSkip:false}}}},
+    /* Ecrire ici la part de chaque barre dans le total affiche n'aurait
+       aucun sens : ce total serait une somme de paniers MOYENS, une
+       quantite qui ne correspond a rien. L'indice, lui, en a un --
+       100 vaut le panier moyen de l'export. */
+    plugins:[etiquetteSerie(0,
+      triPm.map(c => (totTickets && totHT)
+        ? 100*val(c,'Panier Moyen')/(totHT/totTickets) : null),
+      v => F(v), 'y')]});
 
   document.getElementById('ca-table').innerHTML = tableHTML(
     [{t:'Caissier'},{t:'CA (F)',num:true},{t:'Part',num:true},{t:'Tickets',num:true},
@@ -1383,11 +1490,16 @@ RENDER['qualite'] = function(){
 
   document.getElementById('qa-kpi').innerHTML = [
     tuile({k:'CONTRÔLES AU VERT', v:F(ok)+' / '+F(R.length), cls:'good',
-           d:'invariants structurels vérifiés à chaque extraction'}),
+           part:{v:ok, total:R.length || 1, c:'var(--st-good)'},
+           d:F1(PCT(ok, R.length))+' % des contrôles — invariants structurels '
+             +'vérifiés à chaque extraction'}),
     tuile({k:'ÉCARTS CONNUS ET EXPLIQUÉS', v:F(connus), cls:'warn',
-           d:'documentés, stables, non bloquants'}),
+           part:{v:connus, total:R.length || 1, c:'var(--st-warn)'},
+           d:F1(PCT(connus, R.length))+' % — documentés, stables, non bloquants'}),
     tuile({k:'DONNÉES MANQUANTES', v:F(manquants), cls:manquants?'crit':'good',
-           d:'limitent ce que le tableau de bord peut affirmer'}),
+           part:{v:manquants, total:R.length || 1, c:'var(--st-crit)'},
+           d:F1(PCT(manquants, R.length))+' % — limitent ce que le tableau de '
+             +'bord peut affirmer'}),
     tuile({k:'PÉRIODE COUVERTE',
            v:F(new Set(DATA.resultat_jour.map(r=>r.d)).size), u:'nuits',
            d:dateLabel(DATA.meta.periode_debut)+' → '+dateLabel(DATA.meta.periode_fin)}),

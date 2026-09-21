@@ -447,9 +447,9 @@ tr.cliquable td:nth-child(2)::after{content:' A'; color:var(--accent); font-we
 .compo i{display:block; position:relative; min-width:2px;
   font-style:normal; font-size:11px; font-weight:600; line-height:30px;
   text-align:center; white-space:nowrap; overflow:hidden;}
-/* L'encre du chiffre est celle du fond de l'etablissement, pas une
-   teinte choisie : elle doit tenir sur quatre couleurs de segment
-   differentes, et c'est le fond qui est commun a toutes. */
+/* L'encre du chiffre est posee par encreSurSegment(), qui compare les
+   deux contrastes possibles sur CETTE couleur-la. La regle ici ne fixe
+   que la graisse, et une encre de repli. */
 .compo i b{color:var(--bg); font-weight:700;}
 .compo-leg{display:flex; flex-wrap:wrap; gap:6px 20px; margin-top:12px;
   font-size:11.5px;}
@@ -1069,50 +1069,7 @@ const pctBarres = (axe, decimales) => ({
    page en diagonale, sans souris.
    ===================================================================== */
 
-/* Claire sur fond sombre, sombre sur fond clair -- decide par la
-   luminance relative, comme le fait le calcul de contraste WCAG. */
-function encreSur(fond){
-  const m = /^#([0-9a-f]{6})$/i.exec(String(fond || '').trim());
-  if(!m) return '#FFFFFF';
-  const v = i => {
-    const c = parseInt(m[1].substr(i * 2, 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-  };
-  const L = 0.2126 * v(0) + 0.7152 * v(1) + 0.0722 * v(2);
-  return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? '#FFFFFF' : '#0B0906';
-}
 
-/* Part de chaque secteur, inscrite dans l'anneau. */
-const pctAnneau = () => ({
-  id: 'pctA' + Math.random().toString(36).slice(2, 7),
-  afterDatasetsDraw(ch) {
-    const meta = ch.getDatasetMeta(0);
-    const data = ch.data.datasets[0].data;
-    const total = data.reduce((a, b, i) =>
-      a + (ch.getDataVisibility(i) ? (b || 0) : 0), 0);
-    if (!total) return;
-    const ctx = ch.ctx;
-    ctx.save();
-    ctx.font = "600 11.5px 'Inter',sans-serif";
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    meta.data.forEach((arc, i) => {
-      if (!ch.getDataVisibility(i)) return;
-      const pct = 100 * (data[i] || 0) / total;
-      // Un secteur trop fin ne peut pas contenir son etiquette.
-      if (pct < 4) return;
-      const {x, y} = arc.getCenterPoint();
-      // Encre sombre sur les teintes claires, claire sur les sombres :
-      // une etiquette blanche sur jaune serait illisible.
-      // L'encre est CALCULEE a partir du secteur, plus enumeree : la
-      // liste de teintes claires qui tenait ici devenait fausse des
-      // qu'une palette changeait, et AMNESIA vient d'en changer.
-      ctx.fillStyle = encreSur(ch.data.datasets[0].backgroundColor[i]);
-      ctx.fillText(F1(pct) + ' %', x, y);
-    });
-    ctx.restore();
-  },
-});
 
 /* Ajoute la part au texte d'une infobulle, sans remplacer le montant. */
 /* Plage de reference (norme metier) dessinee en fond d'un graphique.
@@ -1213,7 +1170,7 @@ const etiquetteSerie = (di, valeurs, fmt, axe) => ({
 /* Une valeur ecrite au-dessus de chaque colonne, quelle que soit la
    forme du graphique dessous -- pile, groupe, ou barre simple.
 
-   pctBarres et pctAnneau calculent une part du TOTAL AFFICHE. Sur une
+   pctBarres calcule une part du TOTAL AFFICHE. Sur une
    serie mensuelle, ce n'est pas la question : on ne veut pas savoir ce
    que juillet pese dans l'annee, mais ce que les charges de juillet
    pesent dans le chiffre d'affaires DE JUILLET. Le denominateur change
@@ -1298,6 +1255,38 @@ function barCell(part, couleur){
    du segment ou s'y fait couper -- un libelle ampute au premier
    caractere est pire que pas de libelle. La legende, elle, porte tout,
    toujours, et c'est elle qui rend la figure lisible sans couleur. */
+/* Quelle encre poser sur un segment de couleur.
+
+   La premiere version ecrivait toujours var(--bg), le jeton le plus
+   sombre du theme. Cela tient sur des teintes claires, et cede sur les
+   sombres : le rouge d'alerte d'AMNESIA tombait a 4,16:1 -- sous le
+   4,5:1 exige d'un texte normal, et ce libelle de 11px gras EN EST un.
+
+   On choisit donc celle des deux qui contraste le mieux, en comparant
+   les rapports WCAG reels : blanc contre le fond du theme, et non
+   contre un noir suppose. Sur ce meme rouge, le blanc donne 4,80:1.
+
+   Rien n'est devine : les deux rapports sont calcules, et le meilleur
+   gagne. */
+function _luminance(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if(!m) return null;
+  const v = i => {
+    const c = parseInt(m[1].substr(i * 2, 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * v(0) + 0.7152 * v(1) + 0.0722 * v(2);
+}
+function encreSurSegment(fond){
+  const L = _luminance(fond);
+  if(L === null) return 'var(--bg)';
+  const Lfond = _luminance(CSSVAR('--bg'));
+  const surBlanc  = 1.05 / (L + 0.05);
+  const surSombre = Lfond === null ? 0
+    : (Math.max(L, Lfond) + 0.05) / (Math.min(L, Lfond) + 0.05);
+  return surBlanc > surSombre ? '#FFFFFF' : 'var(--bg)';
+}
+
 function barreComposition(segments, fmt){
   const f = fmt || FCFA;
   const parts = segments.filter(s => s.v > 0);
@@ -1307,7 +1296,9 @@ function barreComposition(segments, fmt){
   const barre = parts.map(s => {
     const pct = 100 * s.v / total;
     return `<i style="flex:${s.v};background:${s.c}" title="${s.l}">`
-      + (pct >= 9 ? `<b>${F1(pct)} %</b>` : '') + '</i>';
+      + (pct >= 9
+         ? `<b style="color:${encreSurSegment(s.c)}">${F1(pct)} %</b>` : '')
+      + '</i>';
   }).join('');
 
   const legende = parts.map(s => `<span><i style="background:${s.c}"></i>

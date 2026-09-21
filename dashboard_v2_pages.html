@@ -47,9 +47,11 @@
   </div>
 
   <div class="grid g3">
-    <div class="card"><h3>Poids des activités dans le CA net</h3>
-      <div class="sub">Part de chaque activité sur la période.</div>
-      <div class="chart-wrap s"><canvas id="c-sy-part"></canvas></div>
+    <div class="card"><h3>Poids des activités, et ce qu'elles rapportent</h3>
+      <div class="sub">La même répartition deux fois : en haut la part de chaque
+        activité dans le chiffre d'affaires net, en bas sa part dans la marge
+        brute. L'écart entre les deux lignes est ce qui compte.</div>
+      <div id="sy-part"></div>
     </div>
     <div class="card"><h3>Contribution à la marge brute</h3>
       <div class="sub">Ce que chaque activité rapporte réellement, en francs.</div>
@@ -86,8 +88,9 @@
     </div>
     <div class="card">
       <h3>Structure du CA net</h3>
-      <div class="sub">Où part chaque franc encaissé.</div>
-      <div class="chart-wrap l"><canvas id="c-re-struct"></canvas></div>
+      <div class="sub">Où part chaque franc encaissé — une seule ligne à
+        l'échelle, avec la part écrite dans chaque segment.</div>
+      <div id="re-struct"></div>
     </div>
   </div>
 
@@ -384,8 +387,11 @@
     </div>
     <div class="card">
       <h3>Répartition par nature</h3>
-      <div class="sub">Achats externes, charges d'exploitation, investissements.</div>
-      <div class="chart-wrap s"><canvas id="c-de-nature"></canvas></div>
+      <div class="sub">Achats externes, charges d'exploitation, investissements —
+        d'abord entre eux, puis rapportés au chiffre d'affaires net. Attention au
+        dénominateur : les deux lignes sont justes et ne disent pas la même
+        chose.</div>
+      <div id="de-nature"></div>
       <h3 style="margin-top:18px;">Charges d'exploitation par poste</h3>
       <div class="sub">Hors achats de marchandises et hors investissements.</div>
       <div class="chart-wrap s"><canvas id="c-de-opex"></canvas></div>
