@@ -45,7 +45,10 @@
 
 import {lire, cookieDepuisEntete} from './lib/session.js';
 import {etablissementDuChemin, etablissementDeLaPage, estUnCode,
-        cheminDe} from './lib/etablissements.js';
+        cheminDe, etablissement} from './lib/etablissements.js';
+import {MARQUES} from './lib/marques.js';
+
+const nomDe = (code) => etablissement(code)?.nom || String(code || '');
 
 export const config = {
   // /api/ est exclu : c'est la fonction de connexion, qui doit etre
@@ -62,51 +65,95 @@ const MESSAGES = {
   2: 'Trop de tentatives. Reessayez dans un quart d\'heure.',
 };
 
+/* L'identite visuelle de la page d'accueil.
+
+   Les deux marques y figurent parce que cette adresse en sert deux. Un
+   lecteur qui n'a acces qu'a AMNESIA arrivait jusqu'ici sur un logo
+   TABOO et un titre TABOO ; rien ne lui disait qu'il etait au bon
+   endroit, et le doute se leve en general en appelant quelqu'un.
+
+   Les couleurs d'AMNESIA viennent de lib/etablissements.js, ou elles
+   sont deja, avec leurs contrastes mesures. Celles de TABOO sont ici :
+   sa `surcharge` est nulle parce que ses jetons SONT ceux de la feuille
+   de style du gabarit -- que le middleware ne lit pas. C'est la seule
+   duplication de ce fichier, et elle est de trois valeurs. */
+const ACCUEIL = {
+  taboo:   {fond: '#001A20', encre: '#9EC4CC', trait: '#2C8598',
+            champ: '#002A33', accent: '#7FD9E8', bouton: '#004F5E'},
+  amnesia: {fond: '#0A0806', encre: '#C9BC96', trait: '#33291A',
+            champ: '#14110B', accent: '#EACE65', bouton: '#272016'},
+};
+
 function pageConnexion(erreur, etab) {
+  /* Sans etablissement demande, la page n'en privilegie aucun : elle
+     prend les couleurs de TABOO, qui sont celles de la racine, et
+     montre les deux marques a egalite. Avec « ?etab=amnesia », elle
+     prend celles d'AMNESIA et le dit -- le lien tient sa promesse des
+     l'ecran de connexion, pas seulement apres. */
+  const t = ACCUEIL[etab] || ACCUEIL.taboo;
+
+  /* Une marque, en carre. `dim` la met en retrait sans la retirer :
+     l'autre etablissement reste visible, parce que la page sert a dire
+     « ces deux-la vivent ici », et qu'un lecteur qui a les deux acces
+     doit voir les deux. */
+  const marque = (code, nom) => `
+    <figure class="m${etab && etab !== code ? ' dim' : ''}">
+      <img src="${MARQUES[code]}" alt="${nom}" width="88" height="88">
+      <figcaption>${nom}</figcaption>
+    </figure>`;
+
   return new Response(`<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TABOO — Accès au tableau de bord</title>
+<title>${etab ? nomDe(etab) : 'TABOO · AMNESIA'} — Accès au tableau de bord</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{color-scheme:dark}
+  :root{color-scheme:dark; --fond:${t.fond}; --encre:${t.encre};
+    --trait:${t.trait}; --champ:${t.champ}; --accent:${t.accent};
+    --bouton:${t.bouton}}
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;display:flex;align-items:center;
-    justify-content:center;background:#001A20;color:#fff;padding:24px;
+    justify-content:center;background:var(--fond);color:#fff;padding:24px;
     font:15px/1.6 'Inter',system-ui,-apple-system,sans-serif}
-  .carte{width:100%;max-width:370px;text-align:center}
-  .logo{width:112px;height:112px;margin:0 auto 22px;display:block;
-    background:#004F5E;border-radius:4px}
+  .carte{width:100%;max-width:392px;text-align:center}
+  /* Les deux marques, cote a cote et de meme taille : aucune des deux
+     n'est l'enseigne principale de cette adresse. */
+  .marques{display:flex;justify-content:center;gap:26px;margin:0 0 24px}
+  .m{margin:0;transition:opacity .2s}
+  .m img{width:88px;height:88px;display:block;border-radius:6px;
+    border:1px solid var(--trait);object-fit:cover}
+  .m figcaption{margin-top:8px;font-size:10.5px;letter-spacing:1.6px;
+    color:var(--encre);text-transform:uppercase}
+  /* En retrait, pas absent : 38 % laisse la forme lisible. */
+  .m.dim{opacity:.38}
+  .m.dim img{border-color:transparent}
   h1{font-size:15px;font-weight:600;letter-spacing:1.4px;margin:0 0 6px;
     text-transform:uppercase}
-  .sub{color:#9EC4CC;font-size:13px;margin:0 0 26px}
+  .sub{color:var(--encre);font-size:13px;margin:0 0 26px}
   form{display:flex;flex-direction:column;gap:11px}
-  input{background:#002A33;border:1px solid #2C8598;color:#fff;
+  input{background:var(--champ);border:1px solid var(--trait);color:#fff;
     padding:12px 14px;border-radius:4px;font-size:15px;font-family:inherit;
     text-align:center;letter-spacing:.6px;width:100%}
-  input:focus{outline:none;border-color:#7FD9E8}
-  button{background:#004F5E;border:1px solid #2C8598;color:#fff;
+  input:focus{outline:none;border-color:var(--accent)}
+  button{background:var(--bouton);border:1px solid var(--trait);color:#fff;
     padding:12px 14px;border-radius:4px;font-size:14px;font-weight:600;
     font-family:inherit;cursor:pointer;letter-spacing:.4px}
-  button:hover{background:#0a6072}
+  button:hover{border-color:var(--accent)}
   .err{background:rgba(208,59,59,.14);border:1px solid #d03b3b;
     color:#f0a0a0;padding:9px 12px;border-radius:4px;font-size:13px;
     margin-bottom:14px}
-  .pied{color:#6E939B;font-size:11.5px;margin-top:24px;line-height:1.6}
+  .pied{color:var(--encre);opacity:.72;font-size:11.5px;margin-top:24px;
+    line-height:1.6}
+  @media (max-width:360px){.marques{gap:18px} .m img{width:72px;height:72px}}
 </style></head><body>
 <div class="carte">
-  <svg class="logo" viewBox="0 0 112 112" role="img" aria-label="TABOO">
-    <rect width="112" height="112" rx="4" fill="#004F5E"/>
-    <text x="56" y="56" text-anchor="middle" fill="#fff"
-      font-family="Inter,sans-serif" font-size="21" font-weight="500"
-      letter-spacing="3.5">TABOO</text>
-    <text x="56" y="72" text-anchor="middle" fill="#B8DCE3"
-      font-family="Inter,sans-serif" font-size="6.5" letter-spacing="1.6">RESTAURANT · LOUNGE BAR</text>
-  </svg>
+  <div class="marques">${marque('taboo', 'TABOO')}${marque('amnesia', 'AMNESIA')}</div>
   <h1>Tableau de bord de direction</h1>
-  <div class="sub">Accès réservé</div>
+  <div class="sub">${etab
+    ? `Accès à ${nomDe(etab)}`
+    : 'Deux établissements, un seul accès'}</div>
   ${erreur ? `<div class="err">${erreur}</div>` : ''}
   <form method="POST" action="/api/connexion">
     ${etab ? `<input type="hidden" name="etab" value="${etab}">` : ''}
@@ -117,8 +164,9 @@ function pageConnexion(erreur, etab) {
            autocomplete="current-password" required>
     <button type="submit">Entrer</button>
   </form>
-  <div class="pied">Ces données sont confidentielles.<br>
-    Chaque connexion est enregistrée.</div>
+  <div class="pied">Chaque compte ne voit que les établissements
+    qui lui sont ouverts.<br>
+    Ces données sont confidentielles, et chaque connexion est enregistrée.</div>
 </div></body></html>`, {
     // 401 et non 200 : un moteur ou un outil de supervision doit
     // comprendre que la page n'est pas le contenu demande.

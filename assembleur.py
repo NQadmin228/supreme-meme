@@ -43,6 +43,7 @@ import re
 import sys
 from pathlib import Path
 
+NL = chr(10)
 BASE = Path(__file__).resolve().parent
 GABARIT = BASE / "dashboard_v2_template.html"
 SORTIE = BASE / "taboo-vercel"
@@ -188,6 +189,44 @@ def assembler(code, surcharges):
     return cible
 
 
+def ecrire_marques():
+    """Encode les logos dans taboo-vercel/lib/marques.js.
+
+    La page de connexion vit dans le middleware, qui s'execute avant
+    toute authentification : une balise <img src="/marque/..."> y
+    declencherait une requete que ce meme middleware intercepterait pour
+    renvoyer la page de connexion. Le logo s'afficherait casse sur la
+    page dont il est le premier element. On les embarque donc, et ce
+    fichier-ci est la seule copie encodee -- les coquilles, elles,
+    prennent la leur par __LOGO__.
+    """
+    lignes = []
+    for code, cfg in ETABLISSEMENTS.items():
+        chemin = BASE / cfg["logo"]
+        lignes.append((code, cfg["logo"], chemin.stat().st_size,
+                       data_uri(chemin)))
+
+    corps = NL.join(
+        f"/* {fichier} — {taille/1024:.0f} Ko */" + NL
+        + f"const {code.upper()} = '{uri}';" + NL
+        for code, fichier, taille, uri in lignes)
+    table = ("export const MARQUES = {" + NL
+             + "".join(f"  {code}: {code.upper()}," + NL for code, *_ in lignes)
+             + "};" + NL)
+
+    cible = SORTIE / "lib" / "marques.js"
+    ancien = cible.read_text(encoding="utf-8") if cible.exists() else ""
+    # L'en-tete explicatif est ecrit une fois pour toutes dans le fichier
+    # lui-meme ; on ne reecrit que les constantes, pour ne pas perdre a
+    # chaque assemblage l'explication de leur presence.
+    marque = "/* ---------- constantes generees ---------- */"
+    tete = ancien.split(marque)[0] if marque in ancien else ""
+    cible.write_text(tete + marque + NL + NL + corps + NL + table,
+                     encoding="utf-8")
+    print(f"  {'lib/marques.js':<16} {cible.stat().st_size/1024:>7.0f} Ko"
+          f"   {len(lignes):>2} marques   (page de connexion)")
+
+
 def principal():
     voulus = sys.argv[1:] or list(ETABLISSEMENTS)
     inconnus = [c for c in voulus if c not in ETABLISSEMENTS]
@@ -196,6 +235,7 @@ def principal():
                          f"Connus : {', '.join(ETABLISSEMENTS)}")
     surcharges = lire_surcharges()
     print()
+    ecrire_marques()
     for code in voulus:
         assembler(code, surcharges)
     print()
