@@ -889,6 +889,24 @@ if(!window.__amnesiaExploCable){
 
 RENDER['horaires'] = function(){
   const h = [...DATA.horaire].sort((a,b)=>ordreNuit(a.heure)-ordreNuit(b.heure));
+
+  /* L'AXE DES HEURES
+
+     Les libelles etaient « 14h-15h », sept caracteres, vingt-deux fois.
+     Chart.js les inclinait a soixante degres, et le texte penche
+     occupait un tiers de chaque carte -- sur celle des ventes, deux
+     cent trois pixels de trace sous soixante pixels d'etiquettes
+     obliques.
+
+     L'heure de debut suffit a situer la barre : une tranche horaire se
+     lit dans une suite, et « 14h, 15h, 16h » n'a aucune ambiguite. Trois
+     caracteres tiennent a plat. L'intervalle complet reste dans
+     l'infobulle, ou il est le titre, et dans le tableau. */
+  const heureCourte = r => r.heure + 'h';
+  const axeHeures = () => axisX({ticks: {color: C.faint, font: {size: 10},
+                                         maxRotation: 0, autoSkip: true,
+                                         autoSkipPadding: 8}});
+  const titreTranche = items => h[items[0].dataIndex].libelle;
   const tot = sum(h, 'ca');
   const nuit = sum(h.filter(r=>r.heure>=22 || r.heure<6), 'ca');
   const forte = h.reduce((a,b)=>(b.ca>(a?.ca??-1)?b:a), null);
@@ -939,13 +957,13 @@ RENDER['horaires'] = function(){
     : '';
 
   setChart('c-ho-ca', {type:'bar',
-    data:{labels:h.map(r=>r.libelle), datasets:[Object.assign({}, BAR, {
+    data:{labels:h.map(heureCourte), datasets:[Object.assign({}, BAR, {
       label:'CA', data:h.map(r=>r.ca), backgroundColor:C.accentMark})]},
     options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
-        callbacks:{label:c=>' '+FCFA(c.parsed.y)
+        callbacks:{title:titreTranche,
+                   label:c=>' '+FCFA(c.parsed.y)
                             +'  ('+F1(PCT(c.parsed.y,tot))+' % du CA)'}})},
-      scales:{y:axisY(), x:axisX({ticks:{color:C.faint, font:{size:9.5},
-                                          maxRotation:60, minRotation:60}})}},
+      scales:{y:axisY(), x:axeHeures()}},
     plugins:[pctBarres('x')]});
 
   document.getElementById('ho-t').innerHTML = tableHTML(
@@ -955,22 +973,24 @@ RENDER['horaires'] = function(){
               F(r.vendeurs), F(r.panier_moyen)]));
 
   setChart('c-ho-panier', {type:'line',
-    data:{labels:h.map(r=>r.libelle), datasets:[Object.assign({}, LINE, {
+    data:{labels:h.map(heureCourte), datasets:[Object.assign({}, LINE, {
       label:'Panier moyen', data:h.map(r=>r.panier_moyen),
       borderColor:C.accent, backgroundColor:'rgba(234,206,101,.14)', fill:true})]},
-    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
-        callbacks:{label:c=>' Panier moyen : '+FCFA(c.parsed.y)}})},
-      scales:{y:axisY(), x:axisX({ticks:{color:C.faint, font:{size:9.5},
-                                          maxRotation:60, minRotation:60}})}}});
+    options:{interaction:{mode:'index', intersect:false},
+      plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
+        callbacks:{title:titreTranche,
+                   label:c=>' Panier moyen : '+FCFA(c.parsed.y),
+                   footer:items=>{const r=h[items[0].dataIndex];
+                     return nb(r.ventes, 'vente', 'ventes')+' sur la tranche';}}})},
+      scales:{y:axisY(), x:axeHeures()}}});
 
   setChart('c-ho-ventes', {type:'bar',
-    data:{labels:h.map(r=>r.libelle), datasets:[Object.assign({}, BAR, {
+    data:{labels:h.map(heureCourte), datasets:[Object.assign({}, BAR, {
       label:'Ventes', data:h.map(r=>r.ventes),
       backgroundColor:C.cat[1], maxBarThickness:20})]},
     options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{
-        callbacks:{label:c=>' '+F(c.parsed.y)+' ventes'}})},
-      scales:{y:axisY(v=>F(v)), x:axisX({ticks:{color:C.faint, font:{size:9.5},
-                                                 maxRotation:60, minRotation:60}})}},
+        callbacks:{title:titreTranche, label:c=>' '+F(c.parsed.y)+' ventes'}})},
+      scales:{y:axisY(v=>F(v)), x:axeHeures()}},
     plugins:[pctBarres('x')]});
 
   document.getElementById('ho-note').textContent =
@@ -2111,6 +2131,20 @@ RENDER['couts'] = function(){
     .map(([k, v]) => ({k, marge: v.net - v.ct, net: v.net, taux: PCT(v.net - v.ct, v.net)}))
     .sort((a, b) => b.marge - a.marge);
 
+  /* COUCHEES, et non debout.
+
+     Vingt et une familles aux noms longs -- « APEROS & DIGESTIFS »,
+     « VINS EFFERVESCENT » -- sur un axe horizontal : Chart.js les
+     inclinait a soixante degres pour les faire tenir, et ces
+     etiquettes obliques mangeaient les deux tiers de la carte. Il
+     restait cent trente-deux pixels de trace sous trois cents pixels
+     de texte penche, qu'il fallait lire la tete de cote.
+
+     Une barre horizontale resout les deux : les noms s'ecrivent a
+     plat, dans le sens de la lecture, et la hauteur de la carte suit
+     le nombre de familles au lieu de le comprimer. Les barres restent
+     empilees -- cout plus marge font le chiffre d'affaires de la
+     famille -- et le taux s'ecrit au bout. */
   setChart('c-ct-cat', {type: 'bar',
     data: {labels: familles.map(x => x.k), datasets: [
       Object.assign({}, STACK, {label: 'Coût de revient',
@@ -2118,25 +2152,27 @@ RENDER['couts'] = function(){
       Object.assign({}, STACK, {label: 'Marge',
         data: familles.map(x => x.marge), backgroundColor: C.cat[0]}),
     ]},
-    options: {interaction: {mode: 'index', intersect: false},
+    options: {indexAxis: 'y', layout: {padding: {right: 54}},
+      interaction: {mode: 'index', intersect: false},
       plugins: {legend: legendTop(true), tooltip: Object.assign({}, TOOLTIP, {
-        callbacks: {label: c2 => ' ' + c2.dataset.label + ' : ' + FCFA(c2.parsed.y),
+        callbacks: {label: c2 => ' ' + c2.dataset.label + ' : ' + FCFA(c2.parsed.x),
           footer: items => {
             const x = familles[items[0].dataIndex];
-            return 'Taux de marge : ' + F1(x.taux) + ' %';
+            return "Chiffre d'affaires : " + FCFA(x.net)
+                   + '  ·  taux de marge ' + F1(x.taux) + ' %';
           }}})},
-      // Empilees, marge et cout font le chiffre d'affaires : la hauteur
-      // de la barre est ce que la famille a rapporte, et la couleur dit
-      // ce qui en reste. L'etiquette de sommet porte le taux.
-      // Une vingtaine de familles : a plat, Chart.js en masque une sur
-      // deux pour les faire tenir, et on ne sait plus quelle barre porte
-      // quel nom. Inclinees, elles tiennent toutes.
-      scales: {y: Object.assign(axisY(), {stacked: true}),
-               x: Object.assign(axisX({ticks: {color: C.faint, font: {size: 9.5},
-                                               maxRotation: 60, minRotation: 60,
-                                               autoSkip: false}}),
-                                {stacked: true})}},
-    plugins: [etiquetteSommet(familles.map(x => x.taux), v => F1(v) + ' %')]});
+      scales: {x: Object.assign(axisY(), {stacked: true,
+                                          grid: {color: C.grid, drawTicks: false}}),
+               y: Object.assign({stacked: true, grid: {display: false},
+                                 border: {color: C.axis},
+                                 ticks: {color: C.dim, font: {size: 10.5},
+                                         autoSkip: false}}, {})}},
+    /* Le taux au bout de la barre entiere : c'est la fin du second
+       segment empile, donc le total. Sur la serie du cout, il aurait
+       marque le milieu de la barre et se serait lu comme la part du
+       cout. */
+    plugins: [etiquetteSerie(1, familles.map(x => x.taux),
+                             v => F1(v) + ' %', 'y')]});
 
   document.getElementById('ct-cat-t').innerHTML = tableHTML(
     [{t: 'Famille'}, {t: "Chiffre d'affaires", num: true}, {t: 'Coût de revient', num: true},

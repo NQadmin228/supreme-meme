@@ -559,12 +559,17 @@
   <div class="card" style="margin-bottom:14px;">
     <div class="card-head">
       <div><h3>Ce que chaque famille rapporte</h3>
-      <div class="sub">Marge en francs et taux de marge, sur les seuls articles
-        dont le cout est connu. Les familles sans cout n'apparaissent pas : elles
-        ne sont pas a zero, elles sont hors de portee.</div></div>
+      <div class="sub">Chaque barre est le chiffre d'affaires de la famille,
+        partagé entre son coût de revient et sa marge ; le taux est écrit au bout.
+        Sur les seuls articles dont le coût est connu — les familles sans coût
+        n'apparaissent pas : elles ne sont pas à zéro, elles sont hors de
+        portée.</div></div>
       <button class="mini" data-toggle="ct-cat-t">Voir les chiffres</button>
     </div>
-    <div class="chart-wrap l"><canvas id="c-ct-cat"></canvas></div>
+    <!-- La hauteur suit le nombre de familles au lieu de les comprimer :
+         vingt et une barres dans trois cent trente pixels donnaient des
+         traits de six pixels sous des etiquettes penchees. -->
+    <div class="chart-wrap" style="height:640px"><canvas id="c-ct-cat"></canvas></div>
     <div class="alt-table" id="ct-cat-t"></div>
   </div>
 
