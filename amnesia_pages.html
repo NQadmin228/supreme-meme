@@ -1,5 +1,5 @@
 <!-- =====================================================================
-     AMNESIA — Les sept pages
+     AMNESIA — Les pages
      ---------------------------------------------------------------------
      Structure identique a celle de TABOO : une balise section par page,
      sections que le chassis affiche une a une, remplies par les fonctions
@@ -28,15 +28,27 @@
     <div class="alt-table" id="sy-serie-t"></div>
   </div>
 
-  <div class="grid g2">
-    <div class="card"><h3>Répartition par type d'article</h3>
-      <div class="sub">Boissons, plats et chicha, en chiffre d'affaires net.</div>
-      <div class="chart-wrap"><canvas id="c-sy-type"></canvas></div>
+  <!-- Deux barres de composition l'une sous l'autre, et non un anneau :
+       la question posee ici est « lequel pese le plus », et deux
+       longueurs alignees se comparent sans avoir a estimer des angles.
+       Surtout, la SECONDE barre n'existait pas -- et c'est elle qui
+       apprend quelque chose. -->
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Ce qui se vend, et ce qui s'offre</h3>
+    <div class="sub">La même répartition, deux fois : en haut la part de chaque
+      type d'article dans le chiffre d'affaires net, en bas sa part dans la valeur
+      offerte. Un type plus large en bas qu'en haut est offert au-delà de ce
+      qu'il vend.</div>
+    <div id="sy-type"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-head">
+      <div><h3>Les dix catégories qui font le chiffre</h3>
+      <div class="sub">Part de chaque catégorie dans le chiffre d'affaires net,
+        écrite au bout de sa barre.</div></div>
     </div>
-    <div class="card"><h3>Les dix catégories qui font le chiffre</h3>
-      <div class="sub">Part de chaque catégorie dans le chiffre d'affaires net.</div>
-      <div class="chart-wrap"><canvas id="c-sy-cat"></canvas></div>
-    </div>
+    <div class="chart-wrap l"><canvas id="c-sy-cat"></canvas></div>
   </div>
 
   <div class="card">
@@ -57,10 +69,26 @@
   <div id="of-constat"></div>
 
   <div class="card" style="margin-bottom:14px;">
+    <h3>Ce que la période a produit</h3>
+    <div class="sub">Le potentiel total, partagé entre ce qui a été encaissé et
+      ce qui est sorti sans contrepartie.</div>
+    <div id="of-compo"></div>
+  </div>
+
+  <!-- Une barre par nuit, empilee : encaisse en bas, offert au-dessus.
+       La hauteur totale est le potentiel de la nuit, et la part offerte
+       se lit comme une proportion de cette hauteur -- une seule echelle,
+       une seule unite. L'ancienne version superposait une ligne de
+       pourcentage sur un second axe vertical : l'endroit ou elle
+       croisait les barres ne dependait que du cadrage choisi. -->
+  <div class="card" style="margin-bottom:14px;">
     <div class="card-head">
-      <div><h3>Valeur offerte, nuit par nuit</h3>
-      <div class="sub">En regard du chiffre d'affaires net de la même nuit.
-        La ligne montre la part que les offerts représentent ce soir-là.</div></div>
+      <div><h3>Encaissé et offert, nuit par nuit</h3>
+      <div class="sub">Chaque barre est le potentiel de la nuit : ce qui a été
+        encaissé, et ce qui est sorti sans contrepartie. Une seule nuit est
+        étiquetée, celle où il est sorti le plus de valeur — cent vingt-sept
+        pourcentages superposés ne se lisent pas. Le détail de chaque nuit est
+        dans l'infobulle et dans le tableau.</div></div>
       <button class="mini" data-toggle="of-jour-t">Voir les chiffres</button>
     </div>
     <div class="chart-wrap l"><canvas id="c-of-jour"></canvas></div>
@@ -78,12 +106,36 @@
     </div>
   </div>
 
+</section>
+
+<!-- =========================== QUI OFFRE ============================
+     Detachee de la page precedente. Celle-ci repond a « qui offre »,
+     celle-la a « qu'est-ce qui est offert ». Ce sont deux questions,
+     deux interlocuteurs et deux decisions ; les empiler sur un seul
+     ecran obligeait a faire defiler six blocs pour arriver a la seule
+     qui se traite en reunion d'equipe.
+     ================================================================ -->
+<section class="page" id="page-offerts-qui">
+  <div class="grid g4" id="oq-kpi"></div>
+
+  <div id="oq-constat"></div>
+
   <div class="card" style="margin-bottom:14px;">
-    <h3>Par caissier</h3>
-    <div class="sub">Valeur offerte rapportée au chiffre d'affaires réalisé par
-      chacun. Le rapport compte davantage que le montant : celui qui encaisse le
-      plus offre mécaniquement le plus.</div>
-    <div id="of-caissier"></div>
+    <div class="card-head">
+      <div><h3>Ce que chacun encaisse, et ce que chacun offre</h3>
+      <div class="sub">Deux barres par caissier, sur la même échelle et dans la
+        même unité. Le taux — offert rapporté à l'encaissé — est écrit au bout
+        de la seconde.</div></div>
+    </div>
+    <div class="chart-wrap l"><canvas id="c-oq-caissier"></canvas></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Le détail par caissier</h3>
+    <div class="sub">Le rapport compte davantage que le montant : celui qui
+      encaisse le plus offre mécaniquement le plus. Les volumes sont en regard
+      pour que la comparaison reste tenable.</div>
+    <div id="oq-caissier"></div>
   </div>
 
   <div class="card">
@@ -92,7 +144,7 @@
       <div class="sub">Chaque article offert, avec son ticket. Taper dans le filtre
         pour chercher un article, un caissier ou une date.</div></div>
     </div>
-    <div id="of-detail"></div>
+    <div id="oq-detail"></div>
   </div>
 </section>
 
@@ -111,11 +163,30 @@
     <div class="alt-table" id="ve-jour-t"></div>
   </div>
 
+  <div id="ve-constat"></div>
+
+  <!-- Deux graphiques et non un seul a deux axes. Le cumul d'un mois et
+       sa moyenne par nuit ne se mesurent pas dans la meme unite : les
+       superposer laissait choisir l'endroit ou les deux series se
+       croisent, donc inventer une correlation. Cote a cote, la question
+       « ce mois est-il plus gros parce qu'il ouvre plus, ou parce que
+       ses nuits valent plus ? » se lit en passant de l'un a l'autre. -->
   <div class="grid g2">
-    <div class="card"><h3>Par mois</h3>
-      <div class="sub">Chiffre d'affaires net et nombre de nuits d'ouverture.</div>
+    <div class="card"><h3>Chiffre d'affaires par mois</h3>
+      <div class="sub">Cumul du mois, et sa part dans la période affichée.</div>
       <div class="chart-wrap"><canvas id="c-ve-mois"></canvas></div>
     </div>
+    <div class="card"><h3>Ce que vaut une nuit, par mois</h3>
+      <div class="sub">Le même chiffre divisé par le nombre de nuits ouvertes.
+        Le nombre au sommet est un <b>indice</b> : 100 vaut une nuit ordinaire de
+        la période, 236 se lit « deux fois et demie une nuit ordinaire ». L'écart
+        avec le graphique de gauche vient du calendrier, pas de la
+        performance.</div>
+      <div class="chart-wrap"><canvas id="c-ve-mois-nuit"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
     <div class="card"><h3>Par jour de la semaine</h3>
       <div class="sub">Chiffre d'affaires net moyen par nuit d'ouverture — une
         moyenne, pas un cumul : sinon les jours les plus fréquents gagneraient
@@ -157,6 +228,8 @@
 <section class="page" id="page-horaires">
   <div class="grid g4" id="ho-kpi"></div>
 
+  <div id="ho-constat"></div>
+
   <div class="card" style="margin-bottom:14px;">
     <div class="card-head">
       <div><h3>Chiffre d'affaires par tranche horaire</h3>
@@ -188,6 +261,8 @@
 <section class="page" id="page-caissiers">
   <div class="grid g4" id="ca-kpi"></div>
 
+  <div id="ca-constat"></div>
+
   <div class="card" style="margin-bottom:14px;">
     <h3>Chiffre d'affaires par caissier</h3>
     <div class="sub">Cumul sur toute la période — cette source ne porte pas de date.</div>
@@ -210,10 +285,18 @@
 
   <div id="re-constat"></div>
 
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Répartition des encaissements</h3>
+    <div class="sub">Part de chaque moyen de règlement dans le montant total,
+      sur une seule ligne et à l'échelle.</div>
+    <div id="re-compo"></div>
+  </div>
+
   <div class="grid g2">
-    <div class="card"><h3>Répartition des encaissements</h3>
-      <div class="sub">Part de chaque moyen de règlement dans le montant total.</div>
-      <div class="chart-wrap"><canvas id="c-re-part"></canvas></div>
+    <div class="card"><h3>Montant par moyen</h3>
+      <div class="sub">Les mêmes montants en francs, pour les comparer deux à
+        deux plutôt qu'au total.</div>
+      <div class="chart-wrap"><canvas id="c-re-montant"></canvas></div>
     </div>
     <div class="card"><h3>Nombre d'opérations</h3>
       <div class="sub">Combien de fois chaque moyen a été utilisé — à confronter
@@ -258,19 +341,6 @@
     <div class="alt-table" id="cr-cascade-t"></div>
   </div>
 
-  <div class="grid g2">
-    <div class="card"><h3>Où va le chiffre d'affaires</h3>
-      <div class="sub">Structure des charges sur la saison en cours, en part du
-        total des charges.</div>
-      <div class="chart-wrap"><canvas id="c-cr-structure"></canvas></div>
-    </div>
-    <div class="card"><h3>Masse salariale par service</h3>
-      <div class="sub">Saison en cours. Aucun nom de personne ne sort du
-        classeur : la paie n'est publiée qu'agrégée par service.</div>
-      <div class="chart-wrap"><canvas id="c-cr-paie"></canvas></div>
-    </div>
-  </div>
-
   <div class="card" style="margin-bottom:14px;">
     <div class="card-head">
       <div><h3>Taux de marge et rentabilité</h3>
@@ -282,21 +352,58 @@
     <div class="foot" id="cr-taux-note" style="margin-top:10px"></div>
   </div>
 
-  <div class="card" style="margin-bottom:14px;">
-    <div class="card-head">
-      <div><h3>Compte de résultat mensuel</h3>
-      <div class="sub">Les vingt-deux mois exploités. Tapez une année ou un mois
-        pour ne garder que ces lignes.</div></div>
-    </div>
-    <div id="cr-table"></div>
-  </div>
-
   <!-- Le detail des redressements vit dans la page « Ecarts &
        controles », qui rassemble ceux des trois sources. Il n'est pas
        repete ici : deux listes du meme sujet divergent des que l'une
        est modifiee. Il reste un renvoi, pour qu'on ne lise pas ce
        compte de resultat en croyant le classeur intact. -->
   <div id="cr-renvoi"></div>
+</section>
+
+<!-- ==================== STRUCTURE DES CHARGES =====================
+     Detachee du compte de resultat. Celui-ci repond a « combien reste-
+     t-il » ; celle-ci a « ou part l'argent ». Les deux tenaient sur un
+     ecran de sept blocs, ou la structure arrivait apres une cascade et
+     deux ratios -- c'est-a-dire jamais.
+     ================================================================ -->
+<section class="page" id="page-structure">
+  <div class="grid g4" id="st-kpi"></div>
+
+  <div id="st-constat"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Où va le chiffre d'affaires</h3>
+    <div class="sub">Les quatre natures de charge et ce qui reste, sur une seule
+      ligne à l'échelle du chiffre d'affaires de la saison. Ce qui dépasse à
+      droite est le résultat ; s'il manque, c'est la perte.</div>
+    <div id="st-compo"></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>Chaque nature de charge en francs</h3>
+      <div class="sub">Les mêmes quatre postes, comparés entre eux plutôt qu'au
+        total. Attention au dénominateur : la part écrite au bout de chaque barre
+        est sa part <b>du total des charges</b>, là où la ligne du dessus rapporte
+        chaque poste <b>au chiffre d'affaires</b>. Les deux sont justes et ne
+        disent pas la même chose.</div>
+      <div class="chart-wrap"><canvas id="c-cr-structure"></canvas></div>
+    </div>
+    <div class="card"><h3>Masse salariale par service</h3>
+      <div class="sub">Saison en cours. Aucun nom de personne ne sort du
+        classeur : la paie n'est publiée qu'agrégée par service.</div>
+      <div class="chart-wrap"><canvas id="c-cr-paie"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h3>Compte de résultat mensuel</h3>
+      <div class="sub">Les vingt-deux mois exploités, avec la part de chaque
+        charge dans le chiffre du mois. Tapez une année ou un mois pour ne
+        garder que ces lignes.</div></div>
+    </div>
+    <div id="cr-table"></div>
+  </div>
 </section>
 
 <!-- ========================== DEPENSES ============================ -->
@@ -481,6 +588,31 @@
     <div id="ct-table"></div>
   </div>
 
+</section>
+
+<!-- ===================== COUVERTURE DES COUTS =====================
+     La methode, separee de son resultat. La page precedente donne des
+     marges ; celle-ci dit sur quelle part du chiffre elles portent,
+     d'ou viennent les prix, et lesquels manquent encore.
+
+     Les deux se lisent dans cet ordre et par des gens differents : la
+     marge interesse la direction, la couverture interesse celui qui va
+     chercher les prix manquants. Les garder ensemble faisait finir la
+     liste de courses en bas d'un ecran que personne ne deroulait.
+     ================================================================ -->
+<section class="page" id="page-couverture">
+  <div class="grid g4" id="cv-kpi"></div>
+
+  <div id="cv-constat"></div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Sur quelle part du chiffre la marge est-elle calculée</h3>
+    <div class="sub">Le chiffre d'affaires partagé entre ce qui a un coût connu
+      et ce qui n'en a pas. Tout ce qui se lit sur la page « Coût de revient »
+      ne porte que sur le premier segment.</div>
+    <div id="cv-compo"></div>
+  </div>
+
   <div class="card" style="margin-bottom:14px;">
     <div class="card-head">
       <div><h3>Comment chaque coût a été rapproché</h3>
@@ -493,10 +625,10 @@
 
   <div class="card">
     <div class="card-head">
-      <div><h3>Les prix d'achat qu'il reste a obtenir</h3>
-      <div class="sub">Classes du plus rentable au moins rentable, avec la
+      <div><h3>Les prix d'achat qu'il reste à obtenir</h3>
+      <div class="sub">Classés du plus rentable au moins rentable, avec la
         couverture que chacun fait gagner. Ce n'est pas un inventaire des
-        absents : c'est une liste de courses, et elle dit ou s'arreter.</div></div>
+        absents : c'est une liste de courses, et elle dit où s'arrêter.</div></div>
     </div>
     <div id="ct-absents"></div>
   </div>

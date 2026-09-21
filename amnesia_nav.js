@@ -1,8 +1,25 @@
 /* =====================================================================
    AMNESIA — Navigation et titres de pages
    ---------------------------------------------------------------------
-   Dix pages, et pas les treize de TABOO. La difference n'est pas un
-   choix de presentation : elle vient de ce que les donnees portent.
+   Quinze pages. La difference avec TABOO n'est pas un choix de
+   presentation : elle vient de ce que les donnees portent.
+
+   POURQUOI QUINZE ET PAS DOUZE
+   ----------------------------
+   Trois pages en ont donne six. A chaque fois, un ecran repondait a
+   DEUX questions posees par deux personnes differentes, et la seconde
+   arrivait apres cinq blocs -- c'est-a-dire jamais.
+
+     Articles offerts    | Qui offre
+       ce qui sort       |   qui le fait sortir
+     Compte de resultat  | Structure des charges
+       combien reste-t-il|   ou part l'argent
+     Cout de revient     | Couverture des couts
+       ce que ca rapporte|   sur quelle part du chiffre, et d'ou
+
+   Scinder ne retire rien : aucun bloc n'a disparu, ils ont change de
+   page. Ce qui change est qu'on atteint le second sujet par la
+   navigation au lieu de la molette.
 
    D'OU VIENT CHAQUE PAGE
    ----------------------
@@ -36,6 +53,7 @@ const NAV = [
   {g:'Direction', p:[
     {id:'synthese', l:'Synthèse', f:true},
     {id:'resultat', l:'Compte de résultat', f:false},
+    {id:'structure', l:'Structure des charges', f:false},
     // Marque, et place en vue : la question « peut-on se fier a ce
     // chiffre ? » se pose AVANT de lire le premier tableau.
     {id:'ecarts', l:'Écarts & contrôles', f:false, dot:'crit'},
@@ -45,6 +63,7 @@ const NAV = [
     // deux cinquiemes de ce qui est encaisse. Ce n'est pas une ligne de
     // detail. Le montant se lit sur la page, il ne s'ecrit pas ici.
     {id:'offerts', l:'Articles offerts', f:true, dot:'crit'},
+    {id:'offerts-qui', l:'Qui offre', f:true},
   ]},
   {g:'Recettes', p:[
     {id:'ventes', l:'Chiffre d\'affaires', f:true},
@@ -56,6 +75,7 @@ const NAV = [
     // de TABOO. La page le dit des sa premiere ligne, et sa couverture
     // est une tuile et non une note de bas de page.
     {id:'couts', l:'Coût de revient & marge', f:false, dot:'warn'},
+    {id:'couverture', l:'Couverture des coûts', f:false},
   ]},
   {g:'Exploitation', p:[
     {id:'depenses', l:'Dépenses', f:false},
@@ -76,6 +96,9 @@ const META = {
   'caissiers':['Caissiers',"Tickets, panier moyen et part des offerts de chacun"],
   'reglements':['Règlements',"Moyens d'encaissement et ventes à crédit"],
   'resultat':['Compte de résultat',"Du chiffre d'affaires au résultat, mois par mois — source : classeur d'exploitation"],
+  'structure':['Structure des charges',"Où part le chiffre d'affaires : quatre natures de charge, et la paie par service"],
+  'offerts-qui':['Qui offre',"Ce que chaque caissier encaisse, et ce qu'il laisse sortir"],
+  'couverture':['Couverture des coûts',"Sur quelle part du chiffre la marge est calculée, d'où viennent les prix, lesquels manquent"],
   'depenses':['Dépenses',"Vingt postes de décaissement, du plus lourd au plus léger"],
   'rapprochement':['Rapprochement caisse',"Ce que l'exploitation déclare, face à ce que la caisse enregistre"],
   'ecarts':['Écarts & contrôles',"Tout ce qui ne concorde pas entre les trois sources, chiffré"],
@@ -96,7 +119,11 @@ const META = {
    socle, comme chez TABOO, et ce sera l'optimisation a faire si le
    premier affichage devient long. A 812 Ko, il ne l'est pas encore. */
 const BESOINS = {
-  'synthese': ['detail_jour'],   // la repartition par type et categorie
-  'offerts':  ['offerts_jour'],
-  'explorer': ['detail_jour'],
+  // La Synthese compare desormais deux repartitions : celle du chiffre
+  // et celle des offerts. La seconde demande le jeu des offerts, qui
+  // n'etait charge que par sa propre page.
+  'synthese':    ['detail_jour', 'offerts_jour'],
+  'offerts':     ['offerts_jour'],
+  'offerts-qui': ['offerts_jour'],
+  'explorer':    ['detail_jour'],
 };
