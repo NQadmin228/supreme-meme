@@ -1197,12 +1197,34 @@ const etiquetteSommet = (valeurs, fmt) => ({
         if (hauts[i] === undefined || el.y < hauts[i]) hauts[i] = el.y;
       });
     });
+    /* Deux regles de placement, apprises en regardant le resultat.
+
+       1. On ne deborde pas de la zone de trace. Centree sur la derniere
+          colonne, une etiquette sort a droite et se fait couper par le
+          bord du canevas -- « 24,6 % » devenait « 24,6 ».
+
+       2. On n'ecrit pas par-dessus la precedente. Sur une douzaine de
+          colonnes serrees, deux etiquettes voisines se chevauchent et
+          produisent « 41,8 %28,0 % », c'est-a-dire un nombre faux que
+          l'oeil lit avant de comprendre. Celle qui ne tient pas est
+          omise : l'infobulle et le tableau la portent, eux, toujours.
+
+       Omettre plutot que superposer est le bon arbitrage -- une
+       etiquette manquante se remarque et s'obtient au survol ; une
+       etiquette illisible se lit quand meme, de travers. */
+    const a = ch.chartArea;
+    let finPrecedente = -Infinity;
     hauts.forEach((y, i) => {
       const v = valeurs[i];
       if (v === null || v === undefined || !isFinite(v)) return;
       const el = ch.getDatasetMeta(0).data[i];
       if (!el) return;
-      ctx.fillText(fmt(v), el.x, y - 6);
+      const texte = fmt(v);
+      const demi = ctx.measureText(texte).width / 2;
+      const x = Math.min(Math.max(el.x, a.left + demi), a.right - demi);
+      if (x - demi < finPrecedente + 4) return;
+      finPrecedente = x + demi;
+      ctx.fillText(texte, x, y - 6);
     });
     ctx.restore();
   },

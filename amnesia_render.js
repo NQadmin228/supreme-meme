@@ -110,28 +110,92 @@ RENDER['synthese'] = function(){
      niveau-là est voulu et suivi. Voir « Articles offerts » pour le détail par
      article, par caissier et par ticket.`);
 
-  /* --- CA net et valeur offerte, meme echelle --- */
-  setChart('c-sy-serie', {type:'line',
-    data:{labels:j.map(r=>r.d), datasets:[
-      Object.assign({}, LINE, {label:'CA net', data:j.map(r=>r.net),
-        borderColor:C.accentMark, backgroundColor:'rgba(15,163,191,.14)', fill:true}),
-      Object.assign({}, LINE, {label:'Valeur offerte', data:j.map(r=>r.offerts_valeur),
-        borderColor:C.crit, backgroundColor:'rgba(208,59,59,.12)', fill:true}),
-    ]},
-    options:{interaction:{mode:'index',intersect:false},
-      plugins:{legend:legendTop(true), tooltip:Object.assign({},TOOLTIP,{callbacks:{
-        label:c=>' '+c.dataset.label+' : '+FCFA(c.parsed.y),
-        footer:items=>{
-          const net = items.find(i=>i.dataset.label==='CA net')?.parsed.y || 0;
-          const off = items.find(i=>i.dataset.label==='Valeur offerte')?.parsed.y || 0;
-          return net ? 'Offert : '+F1(PCT(off,net))+' % du CA de la nuit' : '';
-        }}})},
-      scales:{y:axisY(), x:axisX()}}});
+  /* --- ce qui est encaisse, ce qui est donne ---------------------------
+     Douze barres, et non deux cent cinquante-quatre points.
 
+     La version precedente superposait deux courbes remplies sur les
+     cent vingt-sept nuits de la periode. Chaque nuit y montait et
+     redescendait -- un etablissement qui ouvre trois soirs par semaine
+     produit une dent de scie, pas une tendance -- et les deux
+     remplissages se recouvraient. On y voyait de l'agitation, pas une
+     evolution.
+
+     La Synthese est la page la plus haute du tableau de bord : sa
+     question est « le niveau d'offert bouge-t-il d'un mois sur
+     l'autre », pas « qu'a fait la nuit du 12 fevrier ». Cette derniere
+     est une ligne du tableau ci-dessous, et une barre de la page
+     « Articles offerts », qui garde le grain de la nuit parce que c'est
+     son sujet.
+
+     Empilees, les deux series font le POTENTIEL du mois : la hauteur
+     totale est ce qui aurait pu rentrer, le rouge ce qui n'est pas
+     rentre, et le pourcentage au sommet se lit sans survol.
+
+     Le grain s'adapte : sous sept semaines, decouper en mois donnerait
+     une ou deux barres, et on retombe sur la nuit. */
+  const GRAIN_MOIS = 49;
+  const parGrain = (() => {
+    if(j.length <= GRAIN_MOIS){
+      return j.map(r => ({cle:r.d, libelle:dateLabel(r.d), n:1,
+                          net:r.net, offert:r.offerts_valeur}));
+    }
+    const m = new Map();
+    for(const r of j){
+      const k = moisKey(r.d);
+      if(!m.has(k)) m.set(k, {cle:k, libelle:moisLabel(r.d), n:0, net:0, offert:0});
+      const e = m.get(k);
+      e.n += 1; e.net += r.net; e.offert += r.offerts_valeur;
+    }
+    return [...m.values()].sort((a, b) => a.cle.localeCompare(b.cle));
+  })();
+  const auMois = parGrain.length !== j.length;
+
+  setChart('c-sy-serie', {type:'bar',
+    data:{labels:parGrain.map(g => g.libelle), datasets:[
+      Object.assign({}, STACK, {label:'Encaissé', data:parGrain.map(g => g.net),
+        backgroundColor:C.accentMark}),
+      Object.assign({}, STACK, {label:'Offert', data:parGrain.map(g => g.offert),
+        backgroundColor:C.crit}),
+    ]},
+    options:{interaction:{mode:'index', intersect:false},
+      plugins:{legend:legendTop(true), tooltip:Object.assign({}, TOOLTIP, {callbacks:{
+        label:c => {
+          const g = parGrain[c.dataIndex];
+          const pot = g.net + g.offert;
+          return ' '+c.dataset.label+' : '+FCFA(c.parsed.y)
+                 +'  ('+F1(PCT(c.parsed.y, pot))+' % du potentiel)';
+        },
+        footer:items => {
+          const g = parGrain[items[0].dataIndex];
+          return 'Potentiel : '+FCFA(g.net + g.offert)
+                 + (auMois ? '  ·  '+nb(g.n, 'nuit', 'nuits') : '');
+        }}})},
+      scales:{y:Object.assign(axisY(), {stacked:true}),
+              x:Object.assign(axisX(), {stacked:true})}},
+    /* Une etiquette par barre, et seulement quand elles tiennent : au
+       dela d'une quinzaine, les pourcentages se recouvrent et masquent
+       ce qu'ils annotent. Le tableau, lui, les porte toutes. */
+    plugins:parGrain.length <= 16
+      ? [etiquetteSommet(
+          parGrain.map(g => PCT(g.offert, g.net + g.offert)),
+          /* Sans decimale : sur une page de synthese elle n'apporte
+             rien, et chaque caractere gagne est une etiquette de plus
+             qui tient sans recouvrir sa voisine. La valeur exacte est
+             dans l'infobulle et dans le tableau. */
+          v => F(v)+' %')]
+      : []});
+
+  /* Le tableau suit le grain du graphique : c'est son equivalent
+     lisible, pas un second jeu de donnees. */
   document.getElementById('sy-serie-t').innerHTML = tableHTML(
-    [{t:'Nuit'},{t:'CA net',num:true},{t:'Offert',num:true},{t:'% du CA',num:true}],
-    j.map(r=>[dateLabel(r.d), F(r.net), F(r.offerts_valeur),
-              F1(PCT(r.offerts_valeur, r.net))+' %']));
+    [{t:auMois ? 'Mois' : 'Nuit'}]
+      .concat(auMois ? [{t:'Nuits', num:true}] : [])
+      .concat([{t:'Encaissé', num:true}, {t:'Offert', num:true},
+               {t:'Potentiel', num:true}, {t:'% offert', num:true}]),
+    parGrain.map(g => [g.libelle]
+      .concat(auMois ? [F(g.n)] : [])
+      .concat([F(g.net), F(g.offert), F(g.net + g.offert),
+               F1(PCT(g.offert, g.net + g.offert))+' %'])));
 
   /* --- ce qui se vend, et ce qui s'offre -------------------------------
      Deux compositions superposees, et non un anneau. Un anneau donnait
