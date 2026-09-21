@@ -123,7 +123,12 @@ body{
 }
 /* tabular-nums reserve aux colonnes qui doivent s'aligner verticalement */
 .tab,td.num,th.num,.axis-like{font-variant-numeric:tabular-nums;}
-a{color:var(--s-drink);}
+/* Un lien est de l'interface, pas de la donnee. Il portait --s-drink,
+   c'est-a-dire la couleur de serie des boissons : le meme vert que les
+   segments « BOISSON » des graphiques voisins, ce qui en faisait lire
+   un comme l'autre. L'accent de l'etablissement est le jeton prevu
+   pour l'interface, et il suit le theme. */
+a{color:var(--accent);}
 
 /* ---------- Layout ---------- */
 .shell{display:block; min-height:100vh;}
@@ -252,8 +257,14 @@ a{color:var(--s-drink);}
   font-family:var(--font-body); transition:border-color .12s,color .12s,background .12s;}
 .btn:hover{border-color:var(--s-drink); color:var(--ink);}
 .btn.on{background:var(--surface3); border-color:var(--accent); color:var(--ink); font-weight:500;}
-.btn.primary{background:#1d4f47; border-color:var(--s-drink); color:var(--ink);}
-.btn.primary:hover{background:#236055;}
+/* Le bouton d'action portait un vert ecrit en dur, celui de TABOO. Sur
+   AMNESIA, le seul element interactif mis en avant de la page arborait
+   donc la couleur de l'autre maison. Il se derive maintenant de
+   l'accent de l'etablissement ; la premiere declaration est la reserve
+   pour un moteur sans color-mix. */
+.btn.primary{background:var(--surface3); border-color:var(--accent); color:var(--ink);}
+.btn.primary{background:color-mix(in srgb, var(--accent) 17%, var(--surface));}
+.btn.primary:hover{background:color-mix(in srgb, var(--accent) 27%, var(--surface));}
 .filters.off{opacity:.35; pointer-events:none;}
 .filter-note{font-size:11.5px; color:var(--ink-faint);}
 
@@ -421,6 +432,40 @@ tr.cliquable td:nth-child(2)::after{content:' A'; color:var(--accent); font-we
 /* ---------- Barres en ligne (dans les tableaux) ---------- */
 .bar{height:6px; border-radius:3px; background:var(--surface3); overflow:hidden; min-width:44px;}
 .bar i{display:block; height:100%; border-radius:3px;}
+
+/* ---------- Barre de composition ----------
+   Une part-du-tout qui se lit sans survol et sans compter des angles.
+   Elle remplace les anneaux : sur trois a six postes, l'oeil compare
+   des longueurs alignees bien mieux que des secteurs, et la valeur
+   relative s'ecrit DANS la barre au lieu de vivre dans une infobulle.
+
+   L'ecart de 2px entre segments est du fond, pas un trait : une bordure
+   ajouterait une couleur de plus a une figure qui en porte deja
+   plusieurs. */
+.compo{display:flex; height:30px; border-radius:4px; overflow:hidden;
+  background:var(--surface3); gap:2px;}
+.compo i{display:block; position:relative; min-width:2px;
+  font-style:normal; font-size:11px; font-weight:600; line-height:30px;
+  text-align:center; white-space:nowrap; overflow:hidden;}
+/* L'encre du chiffre est celle du fond de l'etablissement, pas une
+   teinte choisie : elle doit tenir sur quatre couleurs de segment
+   differentes, et c'est le fond qui est commun a toutes. */
+.compo i b{color:var(--bg); font-weight:700;}
+.compo-leg{display:flex; flex-wrap:wrap; gap:6px 20px; margin-top:12px;
+  font-size:11.5px;}
+.compo-leg span{display:inline-flex; align-items:baseline; gap:7px;
+  color:var(--ink-dim);}
+.compo-leg i{width:9px; height:9px; border-radius:2px; display:block;
+  align-self:center; flex:none;}
+.compo-leg b{color:var(--ink); font-weight:600;}
+.compo-leg em{font-style:normal; color:var(--ink-faint);}
+
+/* La part d'une tuile : la meme information que sa ligne de detail,
+   mais en longueur. Optionnelle -- une tuile qui n'est la part de rien
+   n'en porte pas. */
+.stat .p{height:4px; border-radius:2px; background:var(--surface3);
+  margin-top:9px; overflow:hidden;}
+.stat .p i{display:block; height:100%; border-radius:2px;}
 
 /* ---------- Cascade textuelle du compte de resultat ---------- */
 .casc{font-size:13px;}
@@ -678,6 +723,47 @@ const BAR = {borderRadius:4, borderSkipped:'start', maxBarThickness:38,
              borderWidth:2, borderColor:C.surface};
 /* Segment empile : 2px de fond entre segments */
 const STACK = {borderRadius:3, borderWidth:2, borderColor:C.surface, maxBarThickness:38};
+/* L'ECART ENTRE BARRES, MESURE AVANT D'ETRE PEINT
+   ---------------------------------------------------------------------
+   Les barres du chassis portent une bordure de 2px de la couleur du
+   fond : ce n'est pas un contour, c'est un ecart -- deux barres
+   voisines ne se touchent pas.
+
+   Il n'en est un que si la barre est plus large que lui. Sur cent
+   vingt-sept nuits dans cinq cents pixels, chaque barre fait moins de
+   deux pixels : l'ecart la recouvre entierement et le graphique
+   s'affiche VIDE, axes et legende compris. C'est le pire des defauts
+   d'affichage, parce qu'il se lit comme « il n'y a pas de donnees ».
+
+   Le cas s'est produit sur la serie journaliere d'AMNESIA, et de facon
+   plus discrete sur quatre graphiques mensuels de TABOO en fenetre
+   etroite, ou il ne restait qu'un cheveu de couleur au milieu de deux
+   bordures.
+
+   Corriger graphique par graphique aurait demande de connaitre la
+   largeur du conteneur a l'ecriture, donc de deviner. On mesure au
+   moment de peindre, ou la largeur est connue : l'ecart disparait en
+   dessous de six pixels de barre, et revient tout seul quand la fenetre
+   s'elargit. */
+/* Sous garde, comme le reste : si la bibliotheque n'a pas ete servie,
+   un appel a Chart ici arreterait tout le script -- donc aussi les
+   tableaux, qui n'en dependent pas et resteraient lisibles. */
+if(window.Chart) Chart.register({
+  id: 'ecartAdaptatif',
+  beforeDatasetsDraw(ch) {
+    const horizontal = ch.options.indexAxis === 'y';
+    ch.data.datasets.forEach((ds, di) => {
+      const meta = ch.getDatasetMeta(di);
+      if (meta.type !== 'bar') return;
+      for (const el of meta.data) {
+        if (!el || !el.options) continue;
+        const epaisseur = horizontal ? el.height : el.width;
+        if (epaisseur < 6) el.options.borderWidth = 0;
+      }
+    });
+  },
+});
+
 /* Ligne : 2px, point cache au repos, >= 8px au survol */
 const LINE = {borderWidth:2, tension:.25, pointRadius:0, pointHoverRadius:5,
               pointHitRadius:14, pointBorderWidth:2, pointBorderColor:C.surface};
@@ -1094,6 +1180,36 @@ const etiquettesPlugin = (fmt, axe, alterner, base) => ({
   }
 });
 
+/* Une etiquette sur UNE seule serie, avec des valeurs fournies.
+
+   etiquettesPlugin ecrit sur toutes les series : sur un graphique
+   groupe, cela fait deux nombres par categorie, dont le second repete
+   ce que la longueur dit deja. Ici on choisit la serie -- typiquement
+   la seconde -- et on y ecrit autre chose : un taux, un rang, un ecart.
+
+   `valeurs[i]` vient de l'appelant, comme pour etiquetteSommet : le
+   greffon place, il ne calcule pas. */
+const etiquetteSerie = (di, valeurs, fmt, axe) => ({
+  id: 'ser' + Math.random().toString(36).slice(2, 7),
+  afterDatasetsDraw(ch) {
+    const meta = ch.getDatasetMeta(di);
+    if (!meta || meta.hidden) return;
+    const ctx = ch.ctx;
+    ctx.save();
+    ctx.font = "600 11px 'Inter',sans-serif";
+    ctx.fillStyle = C.ink;
+    meta.data.forEach((el, i) => {
+      const v = valeurs[i];
+      if (v === null || v === undefined || !isFinite(v)) return;
+      if (axe === 'y') { ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(fmt(v), el.x + 7, el.y);
+      } else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(fmt(v), el.x, el.y - 5); }
+    });
+    ctx.restore();
+  },
+});
+
 /* Une valeur ecrite au-dessus de chaque colonne, quelle que soit la
    forme du graphique dessous -- pile, groupe, ou barre simple.
 
@@ -1146,16 +1262,60 @@ function avecPart(valeur, total, texte) {
 }
 
 /* ---------- fabriques de fragments reutilisables ---------- */
+/* Une tuile de chiffre-cle.
+
+   o.part : {v, total, c} -- la barre de proportion sous le chiffre.
+   Optionnelle, parce qu'un chiffre n'est pas toujours la part de
+   quelque chose : un panier moyen ne se rapporte a aucun total, et lui
+   coller une barre inventerait un denominateur. Quand elle existe, en
+   revanche, la part se lit en un coup d'oeil au lieu de se dechiffrer
+   dans la ligne de detail. */
 function tuile(o){
+  const part = o.part && o.part.total
+    ? `<div class="p"><i style="width:${Math.max(0, Math.min(100,
+        100 * o.part.v / o.part.total))}%;background:${
+        o.part.c || 'var(--accent)'}"></i></div>`
+    : '';
   return `<div class="stat ${o.cls||''}${o.hero?' hero':''}">
     <div class="k">${o.k}</div>
     <div class="v">${o.v}${o.u?`<span class="u">${o.u}</span>`:''}</div>
+    ${part}
     ${o.d?`<div class="d">${o.d}</div>`:''}</div>`;
 }
 function pill(txt, cls){ return `<span class="pill ${cls||''}"><i></i>${txt}</span>`; }
 function barCell(part, couleur){
   const w = Math.max(0, Math.min(100, part));
   return `<div class="bar"><i style="width:${w}%;background:${couleur}"></i></div>`;
+}
+
+/* Une barre de composition : les segments d'un tout, a l'echelle, avec
+   leur part ecrite dedans quand elle tient et toujours en legende.
+
+   segments : [{l: libelle, v: valeur, c: couleur}]
+   fmt      : formateur de la valeur absolue (FCFA par defaut)
+
+   Le seuil de 9 % n'est pas decoratif : en dessous, « 12,3 % » deborde
+   du segment ou s'y fait couper -- un libelle ampute au premier
+   caractere est pire que pas de libelle. La legende, elle, porte tout,
+   toujours, et c'est elle qui rend la figure lisible sans couleur. */
+function barreComposition(segments, fmt){
+  const f = fmt || FCFA;
+  const parts = segments.filter(s => s.v > 0);
+  const total = parts.reduce((a, s) => a + s.v, 0);
+  if(!total) return '<div class="foot">Aucune valeur sur cette période.</div>';
+
+  const barre = parts.map(s => {
+    const pct = 100 * s.v / total;
+    return `<i style="flex:${s.v};background:${s.c}" title="${s.l}">`
+      + (pct >= 9 ? `<b>${F1(pct)} %</b>` : '') + '</i>';
+  }).join('');
+
+  const legende = parts.map(s => `<span><i style="background:${s.c}"></i>
+    ${s.l} <b>${F1(100 * s.v / total)} %</b>
+    <em>${f(s.v)}</em></span>`).join('');
+
+  return `<div class="compo">${barre}</div>
+          <div class="compo-leg">${legende}</div>`;
 }
 
 function tableHTML(cols, rows){
