@@ -1617,22 +1617,28 @@ function controleAchats(s){
                                      : (ecart > 0 ? '+' : '')+F1(ecart)+' %')];
       }));
 
-  /* --- 2. la caisse face a l'analyse, mois par mois puis jour par jour --- */
+  /* --- 2. la caisse face a l'analyse, mois par mois puis jour par jour ---
+     Les especes ne se comparent PAS jour par jour : l'analyse deduit le
+     CASH du CA (CA moins les autres moyens et les impayes), la caisse date
+     chaque paiement au jour ou il est regle -- un impaye solde le
+     lendemain fait un « ecart » qui n'en est pas un. Le controle du cash
+     est celui de l'analyse : son verificateur, le differentiel cash
+     (prelevements moins CASH net des achats), doit valoir 0. */
   const alerte = r => {
     const motifs = [];
     if(Math.abs(r.caj - r.can - r.rem) >= 1) motifs.push('CA inexpliqué');
-    if(Math.abs(r.esc - r.esa) >= 1) motifs.push('espèces');
-    if(Math.abs(r.auc - r.aua) >= 1) motifs.push('autres moyens');
+    if(Math.abs(r.ver || 0) >= 1) motifs.push("vérificateur de l'analyse");
     if(r.sc > r.dl + .5) motifs.push('caisse > livre');
     return motifs;
   };
   const parMois = new Map();
   for(const r of rappro){
     const k = moisKey(r.d);
-    const m = parMois.get(k) || {k, cac:0, caj:0, rem:0, can:0, esc:0, esa:0, auc:0, aua:0,
-                                 sc:0, dl:0, jours:0, alertes:0};
-    for(const c of ['cac','caj','rem','can','esc','esa','auc','aua','sc','dl']) m[c] += r[c];
+    const m = parMois.get(k) || {k, cac:0, caj:0, rem:0, can:0, sc:0, dl:0,
+                                 jours:0, alertes:0, verKo:0};
+    for(const c of ['cac','caj','rem','can','sc','dl']) m[c] += r[c];
     m.jours++;
+    if(Math.abs(r.ver || 0) >= 1) m.verKo++;
     if(alerte(r).length) m.alertes++;
     parMois.set(k, m);
   }
@@ -1690,11 +1696,12 @@ function controleAchats(s){
       <div class="sub">L'analyse mensuelle fait foi ; la caisse a pu être corrigée après coup.
         Rien n'est corrigé ici : on montre où la caisse s'écarte, et de combien.</div>
       ${tableHTML([{t:'Mois'},{t:'CA caisse (F)',num:true},{t:'CA analyse (F)',num:true},
-                   {t:'Écart',num:true},{t:'dont remises',num:true},{t:'Écart espèces',num:true},
+                   {t:'Écart',num:true},{t:'dont remises',num:true},{t:"Vérificateur de l'analyse",num:true},
                    {t:'Sorties / livre',num:true},{t:'Jours en alerte',num:true}],
         [...parMois.values()].map(m => [
           `<span class="strong">${moisLabel(m.k+'-01')}</span>`, F(m.cac), F(m.can),
-          signe(m.cac - m.can), signe(m.rem), signe(m.esc - m.esa),
+          signe(m.cac - m.can), signe(m.rem),
+          m.verKo ? pill(F(m.verKo)+' j ≠ 0', 'warn') : pill('OK', 'good'),
           m.dl ? P1(m.sc, m.dl) : '—',
           m.alertes ? pill(F(m.alertes)+' / '+F(m.jours), 'warn') : '0 / '+F(m.jours)]))}
     </div>
@@ -1703,18 +1710,20 @@ function controleAchats(s){
   <div class="card">
     <h3>Les jours où la caisse s'écarte de l'analyse</h3>
     <div class="sub">« CA inexpliqué » : écart de CA qui ne vient ni des remises sur ticket ni
-      d'une différence entre les journaux de la caisse. « Caisse > livre » : le tiroir a sorti
-      plus que le livre de dépenses n'en note ce jour-là.</div>
+      d'une différence entre les journaux de la caisse. « Vérificateur de l'analyse » : son
+      différentiel cash n'est pas à 0. « Caisse > livre » : le tiroir a sorti plus que le livre
+      de dépenses n'en note ce jour-là. Les espèces ne se comparent pas jour par jour :
+      l'analyse déduit le cash du CA, la caisse date chaque paiement au jour où il est réglé.</div>
     ${joursAlerte.length ? `<div class="scroll-y" id="ac-rappro">${tableHTML(
-      [{t:'Date'},{t:'CA inexpliqué (F)',num:true},{t:'Écart espèces (F)',num:true},
-       {t:'Écart autres moyens (F)',num:true},{t:'Sorties de caisse (F)',num:true},
-       {t:'Dépenses du livre (F)',num:true},{t:'Motif'}],
-      joursAlerte.map(r => [dateLabel(r.d), signe(r.caj - r.can - r.rem), signe(r.esc - r.esa),
-        signe(r.auc - r.aua), F(r.sc), F(r.dl), alerte(r).join(' · ')]))}</div>`
+      [{t:'Date'},{t:'CA inexpliqué (F)',num:true},{t:'Vérificateur (F)',num:true},
+       {t:'Sorties de caisse (F)',num:true},{t:'Dépenses du livre (F)',num:true},
+       {t:'Caisse − livre (F)',num:true},{t:'Motif'}],
+      joursAlerte.map(r => [dateLabel(r.d), signe(r.caj - r.can - r.rem), signe(r.ver || 0),
+        F(r.sc), F(r.dl), signe(r.sc - r.dl), alerte(r).join(' · ')]))}</div>`
       : '<div class="note good">Aucun jour en écart sur la période.</div>'}
     <div class="foot">Données de caisse extraites le ${echap(K.meta.genere_le)}.</div>
   </div>`;
-  if(joursAlerte.length) rendreFiltrable('ac-rappro', 'Filtrer : espèces, caisse > livre, sept…');
+  if(joursAlerte.length) rendreFiltrable('ac-rappro', 'Filtrer : caisse > livre, vérificateur, sept…');
 }
 
 /* =====================================================================

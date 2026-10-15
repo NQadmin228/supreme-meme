@@ -523,10 +523,14 @@ def main():
     c = wr.cell(ligne, 1, "L'analyse mensuelle (TABOO_Analyses mensuelles.xlsx) fait foi ; la "
                           "caisse peut avoir été corrigée après coup. Ce tableau ne corrige rien : il "
                           "montre où la caisse s'écarte de l'analyse, et de combien. Valeurs en bleu = "
-                          "reprises des fichiers sources ; colonnes noires = calculées.")
+                          "reprises des fichiers sources ; colonnes noires = calculées. Les espèces ne "
+                          "se comparent pas jour par jour : l'analyse déduit le CASH du CA (CA moins les "
+                          "autres moyens et les impayés), la caisse date chaque paiement au jour où il est "
+                          "réglé. Le contrôle du cash est celui de l'analyse elle-même, son vérificateur "
+                          "(différentiel cash), qui doit valoir 0.")
     c.font, c.alignment = F_NOTE, ENROULE
-    wr.merge_cells(start_row=ligne, start_column=1, end_row=ligne, end_column=19)
-    wr.row_dimensions[ligne].height = 30
+    wr.merge_cells(start_row=ligne, start_column=1, end_row=ligne, end_column=20)
+    wr.row_dimensions[ligne].height = 45
     ligne += 2
     for lot in lots:
         jours = jours_du_lot(lot)
@@ -558,12 +562,13 @@ def main():
         titres = ["Date", "CA caisse (journal de vente)", "CA journal CAF avant remise ticket",
                   "Remises sur ticket (journal CAF)", "CA analyse mensuelle",
                   "Écart caisse − analyse", "dont remises sur ticket", "dont écart entre journaux",
-                  "Reste inexpliqué", "Espèces caisse", "Espèces analyse (CASH)", "Écart espèces",
-                  "Autres moyens caisse", "Autres moyens analyse", "Écart autres moyens",
+                  "Reste inexpliqué", "Espèces caisse", "Espèces analyse (CASH)",
+                  "Écart espèces (décalage, pas une alerte)", "Autres moyens caisse",
+                  "Autres moyens analyse", "Écart autres moyens (décalage, pas une alerte)",
                   "Sorties de caisse", "Dépenses du livre", "Part passée par la caisse",
-                  "Alerte"]
-        entete(wr, ligne, titres, [11, 14, 14, 13, 14, 13, 13, 13, 12, 13, 13, 12, 13, 13, 12,
-                                   13, 13, 11, 22])
+                  "Alerte", "Vérificateur de l'analyse (différentiel cash)"]
+        entete(wr, ligne, titres, [11, 14, 14, 13, 14, 13, 13, 13, 12, 13, 13, 14, 13, 13, 14,
+                                   13, 13, 11, 22, 14])
         wr.row_dimensions[ligne].height = 45
         haut = ligne + 1
         for d in jours:
@@ -576,21 +581,20 @@ def main():
                     3: X.z(X.num(cf.get("HT"))), 4: X.z(X.num(cf.get("Remise"))),
                     5: rf.get("CA", 0), 10: regl[d].get("ESPECES", 0), 11: rf.get("CASH", 0),
                     13: autres_c, 14: autres_a, 16: sorties[d],
-                    17: sum(livre_jour[d].values())}
+                    17: sum(livre_jour[d].values()), 20: rf.get("DIFERENTIEL CASH", 0)}
             for col, x in vals.items():
                 c = wr.cell(ligne, col, x)
                 c.font = F_SAISIE
                 c.number_format = "dd/mm/yyyy" if col == 1 else FMT_F
             rappro_jours.append({"d": d.isoformat(), **{k: round(vals[col]) for k, col in (
                 ("cac", 2), ("caj", 3), ("rem", 4), ("can", 5), ("esc", 10), ("esa", 11),
-                ("auc", 13), ("aua", 14), ("sc", 16), ("dl", 17))}})
+                ("auc", 13), ("aua", 14), ("sc", 16), ("dl", 17), ("ver", 20))}})
             L = ligne
             formules = {6: f"=B{L}-E{L}", 7: f"=D{L}", 8: f"=B{L}-C{L}", 9: f"=F{L}-G{L}-H{L}",
                         12: f"=J{L}-K{L}", 15: f"=M{L}-N{L}",
                         18: f'=IF(Q{L}>0,P{L}/Q{L},"")',
                         19: (f'=TRIM(IF(ABS(I{L})>=1,"CA inexpliqué ","")'
-                             f'&IF(ABS(L{L})>=1,"espèces ","")'
-                             f'&IF(ABS(O{L})>=1,"autres moyens ","")'
+                             f'&IF(ABS(T{L})>=1,"vérificateur analyse ","")'
                              f'&IF(P{L}>Q{L}+0.5,"caisse > livre",""))')}
             for col, f in formules.items():
                 c = wr.cell(ligne, col, f)
@@ -599,9 +603,7 @@ def main():
         bas = ligne
         ligne += 1
         wr.cell(ligne, 1, "Total").font = F_GRAS
-        for col in range(2, 18):
-            if col == 18:
-                continue
+        for col in [*range(2, 18), 20]:
             c = wr.cell(ligne, col, f"=SUM({get_column_letter(col)}{haut}:{get_column_letter(col)}{bas})")
             c.font, c.number_format = F_GRAS, FMT_F
         c = wr.cell(ligne, 18, f'=IF(Q{ligne}>0,P{ligne}/Q{ligne},"")')
@@ -610,7 +612,7 @@ def main():
         c.font = F_GRAS
         total = ligne
         from openpyxl.formatting.rule import FormulaRule
-        wr.conditional_formatting.add(f"A{haut}:S{bas}",
+        wr.conditional_formatting.add(f"A{haut}:T{bas}",
                                       FormulaRule(formula=[f'LEN($S{haut})>0'], fill=FOND_ALERTE))
 
         # Par moyen de paiement
