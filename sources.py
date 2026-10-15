@@ -57,6 +57,11 @@ def _valeurs():
     return _lu
 
 
+def configure(cle):
+    """Vrai si `cle` est renseignee : pour les sources facultatives."""
+    return bool(os.environ.get(cle, "").strip() or _valeurs().get(cle, ""))
+
+
 def source(cle, dossier=False):
     """Le chemin configure sous `cle`, verifie. S'arrete net s'il manque."""
     brut = os.environ.get(cle, "").strip() or _valeurs().get(cle, "")
@@ -95,6 +100,11 @@ def trouver(dossier, fragment, colonnes=(), extension=".csv"):
                  if voulu in _forme(p.name)
                  and (not requises or requises <= _entete(p))]
     if len(candidats) == 1:
+        return candidats[0]
+    # Le logiciel de caisse sort parfois deux fois le meme rapport sous deux
+    # noms (« journal de vente » et « journal de vente date »). Des copies
+    # identiques a l'octet ne sont pas une ambiguite : on prend la premiere.
+    if candidats and len({p.read_bytes() for p in candidats}) == 1:
         return candidats[0]
     precision = f" avec les colonnes {', '.join(colonnes)}" if colonnes else ""
     if not candidats:

@@ -25,7 +25,7 @@ version validée par la direction. Jeu de données figé : exports POS du
 26/08/2026, période du 19/04/2023 au 23/08/2026 (1 206 nuits d'exploitation).
 
 ```bash
-python 20_extraction_v2.py   # exports CSV -> data_v2.json
+python 21_extraction_taboo.py # exports CSV -> data_v2.json
 python assembleur.py          # -> taboo-vercel/index.html et amnesia.html
 ```
 
@@ -72,25 +72,48 @@ GitHub (main)  ──>  Vercel construit les coquilles  ──>  api/donnees.js 
 ### Préparer un poste
 
 ```bash
-pip install pandas openpyxl "psycopg[binary]"
+pip install openpyxl "psycopg[binary]"
 cp sources.example.env sources.env       # puis renseigner les chemins
 ```
+
+Ni pandas ni numpy : l'extraction TABOO tourne en Python standard, y compris
+sur un poste dont la stratégie de sécurité bloque les bibliothèques compilées.
 
 Puis créer `taboo-vercel/.env.local` avec une ligne
 `DATABASE_URL_UNPOOLED=…` : la chaîne de connexion **directe** de Neon, celle
 sans `-pooler` (console Neon → *Connect*). Ni ce fichier ni `sources.env` ne
-sont versionnés : `sources.env` dit où sont les exports **sur ce poste**. Les exports de caisse sont retrouvés par la partie stable de leur
-nom : on peut déposer un nouvel export sans toucher au code, à condition de
-retirer l'ancien du dossier.
+sont versionnés : `sources.env` dit où sont les exports **sur ce poste**. Les
+exports de caisse sont retrouvés par la partie stable de leur nom : on peut
+déposer un nouvel export sans toucher au code, à condition de retirer l'ancien
+du dossier.
 
 ### Mettre les chiffres à jour
 
 ```bash
-python 20_extraction_v2.py && python 22_decouper.py                     # TABOO
-python 30_extraction_amnesia.py && python 32_extraction_mensuel_amnesia.py   && python 33_couts_amnesia.py && python 31_decouper_amnesia.py         # AMNESIA
+python 21_extraction_taboo.py && python 22_decouper.py                  # TABOO
+python 30_extraction_amnesia.py && python 32_extraction_mensuel_amnesia.py
+python 33_couts_amnesia.py && python 31_decouper_amnesia.py             # AMNESIA
 python 60_publier_donnees.py --essai                                    # vérifier
 python 60_publier_donnees.py                                            # publier
+python 41_controle_achats.py                                            # contrôle de gestion
 ```
+
+**Un nouveau mois TABOO** : déposer le dossier du « Rapport mensuel » de la
+caisse (journal de vente, journal CAF, états des dépenses, des règlements, par
+famille) comme sous-dossier de `TABOO_RAPPORTS_MENSUELS`, mettre à jour
+`TABOO_Analyses mensuelles.xlsx`, puis relancer la chaîne. L'extraction refuse
+un mois qui recouvre des jours déjà chargés, et signale les jours manquants.
+
+**L'analyse mensuelle fait foi.** Le livre de dépenses est lu dans son onglet
+`Détail_Dépenses`, et chaque mois de caisse lui est rapproché : CA, encaissements
+par moyen de paiement, sorties de caisse face au livre. Les écarts figurent sur
+la page « Qualité des données » et, jour par jour, dans l'onglet
+`Rapprochement_caisse` du classeur du contrôle de gestion.
+
+`python 21_extraction_taboo.py --comme-v2` ignore rapports mensuels et classeur :
+sur l'export du 26/08/2026, il redonne exactement la sortie de l'ancienne
+extraction pandas (`20_extraction_v2.py`, conservée comme référence). C'est le
+test de non-régression de la chaîne.
 
 La publication est visible au rechargement suivant de la page : aucun
 déploiement n'est nécessaire. Le branchement initial de Vercel sur le dépôt est
@@ -152,13 +175,15 @@ deux et fausserait tous les totaux journaliers.
 ## Arborescence
 
 ```
-20_extraction_v2.py            exports CSV -> data_v2.json
+21_extraction_taboo.py         exports + rapports mensuels -> data_v2.json (sans pandas)
+20_extraction_v2.py            ancienne extraction pandas, gardée comme référence
 assembleur.py                  assemblage des coquilles (TABOO + AMNESIA)
 dashboard_v2_template.html     coquille, styles, socle JS
 dashboard_v2_pages.html        balisage des 14 pages
 dashboard_v2_render.js         logique de rendu
 LISEZ-MOI_v2.md                notes de la version autonome
 40_feuille_achats.py           nomenclature -> feuille de saisie des achats par article
+41_controle_achats.py          caisse -> classeur du contrôle de gestion + rapprochement
 60_publier_donnees.py          taboo-vercel/donnees/ -> table jeu_donnees (Neon)
 sources.py                     chemins des fichiers sources, lus dans sources.env
 sources.example.env            modèle de sources.env, à copier sur chaque poste
@@ -218,6 +243,8 @@ il faut disposer des exports POS et des référentiels :
 | `Chiffre d'affaire globale*.csv`, `INVENTAIRE*.csv` | exports POS |
 | `Depenses TABOO*.csv` | saisie manuelle de l'établissement |
 | `couts_de_revient.csv` | fiches techniques |
+| `Rapport mensuel … 9-2026.csv` | rapports mensuels de la caisse, un dossier par mois |
+| `TABOO_Analyses mensuelles.xlsx` | classeur du contrôle de gestion — fait foi (livre de dépenses, CA et encaissements du mois) |
 | `TABOO_Nomenclature_et_fiches_composition.xlsx` | catalogue des achats, lu par `40_feuille_achats.py` |
 
 ---
