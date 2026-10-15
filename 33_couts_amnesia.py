@@ -82,8 +82,10 @@ import sys
 import unicodedata
 from pathlib import Path
 
+from sources import source
+
 BASE = Path(__file__).resolve().parent
-REFERENTIEL = Path(r"C:\Users\user\Downloads\couts_de_revient.csv")
+REFERENTIEL = source("COUTS_DE_REVIENT")
 SOURCE_AMNESIA = BASE / "data_amnesia.json"
 CIBLE = BASE / "data_couts_amnesia.json"
 

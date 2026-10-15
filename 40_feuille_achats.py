@@ -47,7 +47,6 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
 BASE = Path(__file__).resolve().parent
-NOMENCLATURE = BASE.parent / "TABOO_Nomenclature_et_fiches_composition.xlsx"
 SORTIE = BASE / "TABOO_Saisie_achats.xlsx"
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -472,9 +471,13 @@ def feuille_controle(ws):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--nomenclature", type=Path, default=NOMENCLATURE)
+    ap.add_argument("--nomenclature", type=Path,
+                    help="defaut : TABOO_NOMENCLATURE dans sources.env")
     ap.add_argument("--sortie", type=Path, default=SORTIE)
     args = ap.parse_args()
+    if args.nomenclature is None:
+        from sources import source
+        args.nomenclature = source("TABOO_NOMENCLATURE")
     if not args.nomenclature.exists():
         raise SystemExit(f"Nomenclature introuvable :\n  {args.nomenclature}")
 

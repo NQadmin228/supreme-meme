@@ -1,4 +1,5 @@
-# Le tableau de bord contient les donnees : jamais versionne.
+# Coquilles produites par ../assembleur.py, a la construction : un produit,
+# pas une source. Elles ne contiennent plus de donnees.
 index.html
 .vercel
 node_modules

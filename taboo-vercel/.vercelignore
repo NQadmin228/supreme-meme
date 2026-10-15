@@ -29,3 +29,11 @@ base/
 node_modules/
 .vercel/
 *.md
+
+# Les jeux de donnees ne montent plus avec le site : ils sont publies dans
+# Neon et servis par api/donnees.js. Un dossier donnees/ televerse par
+# megarde serait servi EN PRIORITE sur la reecriture -- des chiffres
+# perimes, sans controle d'acces par la base, et sans que rien ne le
+# signale. On l'exclut donc meme d'un `vercel --prod` lance depuis un
+# poste qui l'a encore.
+donnees/

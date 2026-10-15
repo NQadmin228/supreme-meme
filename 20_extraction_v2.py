@@ -43,20 +43,25 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-BASE = Path(__file__).resolve().parent
-BQ = Path(r"C:\Users\user\Downloads\BIG QUERRY\BIG QUERRY")
-DL = Path(r"C:\Users\user\Downloads")
+from sources import source, trouver
 
-F_VENTES    = BQ / "Journal_Vente2482026174540.csv"
-F_FAMILLE   = BQ / "Balance par catégorie 175024 82026.csv"
-F_OFFERTS   = BQ / "Articles offerts 175124 82026.csv"
-F_PANIER    = BQ / "Panier moyen horaire et journalier 175224 82026.csv"
-F_REGL      = BQ / "% Balance par règlement 175124 82026.csv"
-F_UTIL      = BQ / "Balance par utilisateur 175124 82026.csv"
-F_CAGLOBAL  = BQ / "Chiffre d'affaire globale 174924 82026.csv"
-F_INVENT    = BQ / "INVENTAIRE248202618038.csv"
-F_DEPENSES  = DL / "Depenses TABOO - Détail_Dépenses .csv"
-F_COUTS     = DL / "couts_de_revient.csv"
+BASE = Path(__file__).resolve().parent
+# Chemins : sources.env (voir sources.example.env). Les exports de caisse
+# sont retrouves par la partie stable de leur nom ; le journal detaille
+# se distingue des trois syntheses du meme nom par ses colonnes Date et
+# Heure.
+BQ = source("TABOO_EXPORTS_POS", dossier=True)
+
+F_VENTES    = trouver(BQ, "Journal_Vente", colonnes=("Date", "Heure"))
+F_FAMILLE   = trouver(BQ, "Balance par catégorie")
+F_OFFERTS   = trouver(BQ, "Articles offerts")
+F_PANIER    = trouver(BQ, "Panier moyen horaire")
+F_REGL      = trouver(BQ, "Balance par règlement")
+F_UTIL      = trouver(BQ, "Balance par utilisateur")
+F_CAGLOBAL  = trouver(BQ, "Chiffre d'affaire globale")
+F_INVENT    = trouver(BQ, "INVENTAIRE")
+F_DEPENSES  = source("TABOO_DEPENSES")
+F_COUTS     = source("COUTS_DE_REVIENT")
 
 
 def num(s):

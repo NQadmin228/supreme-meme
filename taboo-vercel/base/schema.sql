@@ -3,13 +3,17 @@
    ---------------------------------------------------------------------
    CE QUE CETTE BASE CONTIENT, ET CE QU'ELLE NE CONTIENT PAS
    ---------------------------------------------------------
-   Elle contient les COMPTES et le JOURNAL. Rien d'autre.
+   Elle contient les COMPTES, le JOURNAL, et la COPIE PUBLIEE des jeux
+   de donnees que le tableau de bord affiche (table jeu_donnees, en fin
+   de fichier).
 
-   Les donnees du restaurant restent ou elles sont : BigQuery
-   europe-west1, agregees par snapshot_builder, servies dans
-   index.html. Les dupliquer ici creerait une seconde source de verite
-   et le registre semantique cesserait d'etre la seule definition des
-   metriques. Cette base ne sait pas ce qu'est un couvert.
+   Cette copie n'est pas une source : elle ne se calcule pas ici, ne se
+   corrige pas ici, et aucune metrique n'y est definie. Les chiffres
+   naissent dans les scripts d'extraction, a partir des exports de
+   caisse ; 60_publier_donnees.py les depose ici tels quels, comme on
+   deposerait un fichier sur un serveur. Cette base ne sait toujours pas
+   ce qu'est un couvert -- elle stocke un texte JSON et le rend a qui y
+   a droit.
 
    POURQUOI LE MIDDLEWARE NE LIT JAMAIS CETTE BASE
    -----------------------------------------------
@@ -153,3 +157,53 @@ alter table utilisateur drop constraint if exists utilisateur_acces_connus;
 
 alter table utilisateur add constraint utilisateur_acces_connus
   check (acces <@ array['taboo', 'amnesia']::text[]);
+
+/* ---------- Les jeux de donnees publies ---------- */
+/* Ajout : les donnees ne montent plus avec le site.
+
+   POURQUOI ELLES QUITTENT LE DEPLOIEMENT
+   --------------------------------------
+   Le site se construit desormais depuis le depot GitHub, qui est
+   public. Les jeux de donnees -- le compte de resultat de chaque
+   etablissement -- ne peuvent pas y entrer : un fichier pousse une fois
+   reste dans l'historique pour toujours. Ils etaient jusqu'ici televerses
+   depuis un poste avec `vercel --prod`, ce qui faisait de ce poste le
+   seul endroit d'ou le site pouvait etre remis en ligne.
+
+   Ici, ils sont servis par api/donnees.js, qui verifie la session ET
+   relit les droits du compte dans `utilisateur` : retirer un
+   etablissement a quelqu'un lui coupe les chiffres immediatement, et
+   non plus a l'expiration de son cookie.
+
+   POURQUOI DU TEXTE ET PAS DU JSONB
+   ---------------------------------
+   Personne n'interroge l'interieur de ces documents ; on les rend tels
+   qu'on les a recus. jsonb les analyserait a l'ecriture et les
+   reserialiserait a la lecture, pour rien -- et l'empreinte calculee a
+   la publication ne correspondrait plus aux octets servis.
+
+   UNE PUBLICATION REMPLACE TOUT D'UN COUP
+   ---------------------------------------
+   60_publier_donnees.py ecrit tous les jeux d'un etablissement dans une
+   seule transaction. Un lecteur voit l'ancienne version ou la nouvelle,
+   jamais un socle neuf avec des morceaux anciens. */
+
+create table if not exists jeu_donnees (
+  etablissement text        not null,
+  nom           text        not null,
+  contenu       text        not null,
+  octets        integer     not null,
+  -- sha256 du contenu, pour verifier qu'on sert ce qu'on a publie.
+  empreinte     text        not null,
+  publie_le     timestamptz not null default now(),
+  publie_par    text,
+
+  primary key (etablissement, nom),
+
+  constraint jeu_donnees_etablissement_connu
+    check (etablissement in ('taboo', 'amnesia')),
+  -- Le nom finit dans une URL : on le borne ici plutot que de compter
+  -- sur chaque appelant pour le filtrer.
+  constraint jeu_donnees_nom_forme
+    check (nom ~ '^[a-z0-9_]{1,60}$')
+);

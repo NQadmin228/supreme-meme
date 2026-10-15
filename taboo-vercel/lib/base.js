@@ -161,6 +161,20 @@ export async function noterConnexion(identifiant) {
      where identifiant = ${normaliserIdentifiant(identifiant)}`;
 }
 
+/* ---------- Jeux de donnees publies ---------- */
+
+/* Un jeu publie, tel que 60_publier_donnees.py l'a depose. Le contenu
+   est rendu tel quel : c'est un texte JSON, pas un objet a reanalyser. */
+export async function lireJeu(etablissement, nom) {
+  const sql = bd();
+  const r = await sql`
+    select contenu, octets, empreinte, publie_le
+      from jeu_donnees
+     where etablissement = ${etablissement} and nom = ${nom}
+     limit 1`;
+  return r[0] ?? null;
+}
+
 /* ---------- Journal ---------- */
 
 export async function journaliser({evenement, sujet, acteur, detail, ip}) {

@@ -74,8 +74,9 @@ from collections import defaultdict
 from datetime import datetime, date
 from pathlib import Path
 
+from sources import source
+
 BASE = Path(__file__).resolve().parent
-DEFAUT = Path(r"C:\Users\user\Downloads\wetransfer_document-infogest_2026-09-15_1257")
 SORTIE = BASE / "data_amnesia.json"
 
 
@@ -510,7 +511,10 @@ def construire(x):
 
 
 def principal():
-    dossier = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAUT
+    # Un dossier passe en argument l'emporte : pratique pour rejouer un
+    # ancien lot sans toucher a sources.env.
+    dossier = (Path(sys.argv[1]) if len(sys.argv) > 1
+               else source("AMNESIA_EXPORTS_POS", dossier=True))
     if not dossier.is_dir():
         raise SystemExit(f"Dossier introuvable : {dossier}")
 

@@ -185,7 +185,11 @@ def assembler(code, surcharges):
             print(f"  {'':16} {premier:>7.0f} Ko   au premier affichage"
                   f"   ({total:.0f} Ko si tout etait charge)")
     else:
-        print(f"  {'':16} ATTENTION : {cfg['donnees']} absent")
+        # Cas normal sur Vercel, qui construit depuis le depot : les
+        # donnees n'y sont jamais. Elles sont publiees a part, dans Neon,
+        # par 60_publier_donnees.py. Rien a signaler, seulement a dire.
+        print(f"  {'':16} donnees non presentes ici : publiees a part "
+              f"(60_publier_donnees.py)")
     return cible
 
 

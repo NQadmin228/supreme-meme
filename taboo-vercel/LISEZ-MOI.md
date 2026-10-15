@@ -113,12 +113,40 @@ chaque appel : le pilote HTTP de Neon ouvre une requête, pas une connexion.
 
 ### 5. Déployer
 
-```bash
-vercel --prod
-```
+Le site se construit **depuis le dépôt GitHub**, à chaque push. On ne lance
+plus `vercel --prod` depuis un poste : c'est ce qui faisait de ce poste le
+seul endroit d'où le site pouvait être remis en ligne.
+
+Branchement, une seule fois, dans le tableau de bord Vercel du projet :
+
+1. **Settings → Git → Connect Git Repository** : `NQadmin228/supreme-meme`,
+   branche de production `main`.
+2. **Settings → Build and Deployment** :
+   - *Root Directory* : `taboo-vercel` ;
+   - *Include files outside the root directory in the Build Step* : **activé**
+     — la construction lit `../assembleur.py`, les gabarits et les logos ;
+   - *Framework Preset* : `Other`. La commande de construction vient de
+     `vercel.json` (`python3 ../assembleur.py`).
+3. **Settings → Environment Variables** : les trois variables pour
+   **Production et Preview**. Sans elles, les déploiements de branche
+   répondent 503.
+4. **Settings → Functions → Function Region** : la plus proche de la région
+   de la base Neon. Les jeux de données passent par une fonction ; chaque
+   aller-retour transatlantique se paierait à chaque page.
 
 Les variables ne sont prises en compte qu'au déploiement **suivant** leur
 création. C'est la cause n°1 de « ça renvoie 503 ».
+
+### 6. Les données
+
+Elles ne montent plus avec le site. `60_publier_donnees.py`, à la racine du
+dépôt, les dépose dans la table `jeu_donnees` de Neon ; `api/donnees.js` les
+sert à l'adresse qu'elles ont toujours eue, `/donnees/<établissement>/<jeu>.json`,
+grâce à une réécriture de `vercel.json`. Voir le README du dépôt pour la chaîne
+complète, des exports de caisse à la publication.
+
+Mettre les chiffres à jour ne demande donc **aucun déploiement** : la
+publication est visible au rechargement suivant de la page.
 
 ---
 
@@ -261,21 +289,24 @@ limitation du débit, journalisation.
 
 ## Fichiers
 
-    index.html           le tableau de bord — généré, EXCLU du dépôt
+    index.html           coquille TABOO — construite par Vercel, EXCLUE du dépôt
+    amnesia.html         coquille AMNESIA — idem
     admin.html           la vue d'administration (quelques Ko)
     compte.html          mon compte — ouvert à toute session valide
     middleware.js        vérifie la signature, refuse /admin aux lecteurs
     api/connexion.js     vérifie le compte, pose le cookie
     api/session.js       qui suis-je, déconnexion, changer son mot de passe
     api/admin.js         comptes et journal — rôle admin obligatoire
+    api/donnees.js       les jeux de données — session et droits relus en base
     lib/session.js       le cookie signé — un seul code pour edge et Node
     lib/motdepasse.js    empreintes scrypt, tirage des mots de passe
     lib/base.js          toutes les requêtes SQL du projet
     lib/garde.js         le contrôle d'accès des fonctions
-    base/schema.sql      utilisateur, journal, tentative
+    base/schema.sql      utilisateur, journal, tentative, jeu_donnees
     base/init.mjs        installation du schéma, premier administrateur
-    vercel.json          en-têtes + cleanUrls (voir ci-dessous)
+    vercel.json          construction, réécriture /donnees/, en-têtes, cleanUrls
     .gitignore           index.html, .vercel et .env* ne partent jamais
+    .vercelignore        .env*, base/ et donnees/ ne montent jamais chez Vercel
 
 Trois variables d'environnement, toutes obligatoires :
 

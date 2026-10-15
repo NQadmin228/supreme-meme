@@ -76,10 +76,10 @@ from pathlib import Path
 
 import openpyxl
 
+from sources import source
+
 BASE = Path(__file__).resolve().parent
-SOURCE = Path(r"C:\Users\user\Downloads"
-              r"\wetransfer_document-infogest_2026-09-15_1257"
-              r"\AMNESIA_Analyses mensuelles (1).xlsx")
+SOURCE = source("AMNESIA_CLASSEUR")
 CIBLE = BASE / "data_mensuel_amnesia.json"
 
 if hasattr(sys.stdout, "reconfigure"):

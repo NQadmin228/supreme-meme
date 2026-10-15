@@ -255,8 +255,10 @@ export default async function middleware(requete) {
 
         C'est LA porte qui compte pour le cloisonnement entre TABOO et
         AMNESIA. La coquille est commune et ne contient aucun chiffre ;
-        tout ce qui se lit arrive par /donnees/<code>/, servi par le CDN.
-        Refuser ici, c'est refuser la seule chose qui vaille.
+        tout ce qui se lit arrive par /donnees/<code>/, que vercel.json
+        reecrit vers api/donnees.js. Refuser ici, c'est refuser la seule
+        chose qui vaille -- et la fonction refait le controle de son cote,
+        avec les droits relus en base.
 
         Le middleware n'ouvre pas de connexion : la liste autorisee est
         dans le cookie signe, mise a jour a chaque emission. Consequence
@@ -280,6 +282,7 @@ export default async function middleware(requete) {
     });
   }
 
-  /* 3. Session valide : le CDN sert l'actif statique. */
+  /* 4. Session valide : le CDN sert la coquille, la reecriture envoie
+        les donnees a api/donnees.js. */
   return undefined;
 }

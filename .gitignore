@@ -85,6 +85,11 @@ dashboard_template.html
 dashboard_pages.html
 dashboard_render.js
 
+# Emplacement des fichiers sources sur CE poste (voir sources.py). Les
+# chemins d'un poste n'ont rien a faire dans le projet ; le modele
+# versionne est sources.example.env.
+sources.env
+
 # Instanciation locale : identifiants d'infrastructure et valeurs de
 # controle. Les .example.* correspondants sont versionnes.
 config.env

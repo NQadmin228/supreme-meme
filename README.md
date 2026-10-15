@@ -49,6 +49,55 @@ chargé en 89–121 ms, coût BigQuery nul par utilisateur.
 
 ---
 
+## Reprendre le projet
+
+Le site ne dépend d'aucun poste. Le **code** est ici et Vercel le reconstruit à
+chaque push sur `main`. Les **chiffres** sont publiés à part, dans la base Neon,
+depuis n'importe quel poste qui dispose des exports de caisse.
+
+```
+exports de caisse (CSV)  ──>  extraction  ──>  découpage  ──>  60_publier_donnees.py  ──>  Neon
+                                                                                             │
+GitHub (main)  ──>  Vercel construit les coquilles  ──>  api/donnees.js lit Neon  <──────────┘
+```
+
+### Les accès à transmettre
+
+| Service | Ce qu'il porte | Comment donner l'accès |
+|---|---|---|
+| GitHub `NQadmin228/supreme-meme` | le code | collaborateur du dépôt |
+| Vercel, projet `taboo-vercel` | le site, ses variables | membre de l'équipe Vercel |
+| Neon | comptes, journal, jeux de données | membre du projet Neon |
+
+### Préparer un poste
+
+```bash
+pip install pandas openpyxl "psycopg[binary]"
+cp sources.example.env sources.env       # puis renseigner les chemins
+```
+
+Puis créer `taboo-vercel/.env.local` avec une ligne
+`DATABASE_URL_UNPOOLED=…` : la chaîne de connexion **directe** de Neon, celle
+sans `-pooler` (console Neon → *Connect*). Ni ce fichier ni `sources.env` ne
+sont versionnés : `sources.env` dit où sont les exports **sur ce poste**. Les exports de caisse sont retrouvés par la partie stable de leur
+nom : on peut déposer un nouvel export sans toucher au code, à condition de
+retirer l'ancien du dossier.
+
+### Mettre les chiffres à jour
+
+```bash
+python 20_extraction_v2.py && python 22_decouper.py                     # TABOO
+python 30_extraction_amnesia.py && python 32_extraction_mensuel_amnesia.py   && python 33_couts_amnesia.py && python 31_decouper_amnesia.py         # AMNESIA
+python 60_publier_donnees.py --essai                                    # vérifier
+python 60_publier_donnees.py                                            # publier
+```
+
+La publication est visible au rechargement suivant de la page : aucun
+déploiement n'est nécessaire. Le branchement initial de Vercel sur le dépôt est
+décrit dans [taboo-vercel/LISEZ-MOI.md](taboo-vercel/LISEZ-MOI.md), étape 5.
+
+---
+
 ## Les 14 pages
 
 | Page | Contenu |
@@ -110,6 +159,9 @@ dashboard_v2_pages.html        balisage des 14 pages
 dashboard_v2_render.js         logique de rendu
 LISEZ-MOI_v2.md                notes de la version autonome
 40_feuille_achats.py           nomenclature -> feuille de saisie des achats par article
+60_publier_donnees.py          taboo-vercel/donnees/ -> table jeu_donnees (Neon)
+sources.py                     chemins des fichiers sources, lus dans sources.env
+sources.example.env            modèle de sources.env, à copier sur chaque poste
 
 taboo-serverless/
   config.example.env                à copier en config.env (non versionné)
