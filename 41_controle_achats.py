@@ -21,6 +21,12 @@ CE QU'IL ECRIT, DANS TABOO_MP_prix_unitaires_et_recettes.xlsx
   Rapprochement_caisse    la caisse confrontee a l'analyse mensuelle, jour
                           par jour : CA, encaissements, sorties de caisse.
 
+ET POUR LE SITE, taboo-vercel/donnees/taboo/controle_achats.json
+  Le journal tel que le classeur le tient (quantites saisies comprises),
+  les sorties de caisse par statut et par poste, le rapprochement jour par
+  jour. La page Achats matiere le lit ; 60_publier_donnees.py le publie
+  avec les autres jeux. Ordre : 21, 22, 41, puis 60.
+
 POURQUOI LE RAPPROCHEMENT EST ORIENTE
 -------------------------------------
 L'analyse mensuelle (TABOO_Analyses mensuelles.xlsx) fait foi. La caisse,
@@ -47,6 +53,9 @@ from pathlib import Path
 from sources import source
 
 BASE = Path(__file__).resolve().parent
+# Le jeu publie avec les autres par 60_publier_donnees.py, lu par la page
+# Achats matiere. 22_decouper.py le conserve quand il refait le dossier.
+JEU = BASE / "taboo-vercel" / "donnees" / "taboo" / "controle_achats.json"
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -507,6 +516,7 @@ def main():
             if m:
                 livre_jour[d.date()][poste] += m
 
+    rappro_jours = []
     ligne = 1
     wr.cell(ligne, 1, "Rapprochement : la caisse face à l'analyse mensuelle").font = F_TITRE
     ligne += 1
@@ -571,6 +581,9 @@ def main():
                 c = wr.cell(ligne, col, x)
                 c.font = F_SAISIE
                 c.number_format = "dd/mm/yyyy" if col == 1 else FMT_F
+            rappro_jours.append({"d": d.isoformat(), **{k: round(vals[col]) for k, col in (
+                ("cac", 2), ("caj", 3), ("rem", 4), ("can", 5), ("esc", 10), ("esa", 11),
+                ("auc", 13), ("aua", 14), ("sc", 16), ("dl", 17))}})
             L = ligne
             formules = {6: f"=B{L}-E{L}", 7: f"=D{L}", 8: f"=B{L}-C{L}", 9: f"=F{L}-G{L}-H{L}",
                         12: f"=J{L}-K{L}", 15: f"=M{L}-N{L}",
@@ -668,6 +681,69 @@ def main():
     wr.freeze_panes = "B6"
 
     inv = enregistrer_sans_perte(wb, F_MP, {NOM_CORR, NOM_RAP})
+
+    # -----------------------------------------------------------------
+    # 5. Le jeu du site : ce que le classeur sait, une fois corrige
+    # -----------------------------------------------------------------
+    # Le journal est relu dans le classeur, pas dans la caisse : une
+    # quantite saisie par le controle de gestion, une ligne ajoutee a la
+    # main, un rattachement corrige dans Correspondance_caisse doivent se
+    # voir sur le site. Ni reference de sortie ni nom de caissier : la
+    # page n'en a pas besoin.
+    compte_de = {str(r["id"]): r["compte"] for r in depenses}
+    poste_article = {}
+    for statut, article, poste, _ in choix.values():
+        if statut == ARTICLE and poste:
+            poste_article.setdefault(article, poste)
+    wa = wb["Achats"]
+    fiches = {}
+    for r in range(6, 251):
+        nom = wa.cell(r, 2).value
+        if not nom:
+            continue
+        # Les formules H et M de l'onglet, refaites ici : openpyxl n'en lit
+        # pas le resultat. Prix du lot = min, ou moyenne min-max ;
+        # prix unitaire = prix du lot / quantite du lot / (1 - perte).
+        cat, unite, pmin, pmax, lot, perte = (wa.cell(r, c).value for c in (1, 5, 6, 7, 10, 12))
+        nombre = lambda x: isinstance(x, (int, float))
+        prix = None if not nombre(pmin) else (pmin + pmax) / 2 if nombre(pmax) else pmin
+        pu = prix / lot / (1 - (perte or 0)) if prix is not None and nombre(lot) and lot else None
+        fiches[nom] = {"u": unite, "cat": cat, "pu": round(pu, 4) if pu else None}
+    journal = []
+    for r in range(6, 506):
+        d, article, ref, q, m = (wj.cell(r, c).value for c in (1, 2, 3, 4, 5))
+        if not isinstance(d, datetime) or not article or not isinstance(m, (int, float)):
+            continue
+        caisse = re.match(r"Caisse #(\d+)", str(ref or ""))
+        if caisse and compte_de.get(caisse[1]) in choix:
+            poste = choix[compte_de[caisse[1]]][2]
+        else:
+            poste = poste_article.get(article) or (str(fiches.get(article, {}).get("cat") or "")
+                                                   .split(" ")[0] or None)
+        journal.append({"d": d.date().isoformat(), "a": article, "p": poste, "m": round(m),
+                        "q": q if isinstance(q, (int, float)) else None,
+                        "o": "caisse" if caisse else "saisie"})
+    sorties = defaultdict(lambda: {"m": 0, "n": 0})
+    for r in depenses:
+        statut, _, poste, _ = choix[r["compte"]]
+        s = sorties[(r["date"].date().isoformat(), statut, poste)]
+        s["m"] += r["montant"]
+        s["n"] += 1
+    jeu = {
+        "meta": {"genere_le": f"{datetime.now():%Y-%m-%d %H:%M}",
+                 "mois": sorted({f"{jours_du_lot(l)[-1]:%Y-%m}" for l in lots}),
+                 "a_classer": sum(1 for c in ordre if choix[c][0] == A_CLASSER),
+                 "hypotheses": sum(1 for c in ordre if choix[c][0] == ARTICLE and choix[c][3])},
+        "articles": {a: fiches[a] for a in sorted({j["a"] for j in journal}) if a in fiches},
+        "journal": journal,
+        "sorties": [{"d": d, "s": s, "p": p, "m": round(v["m"]), "n": v["n"]}
+                    for (d, s, p), v in sorted(sorties.items(), key=lambda x: (x[0][0], x[0][1], x[0][2] or ""))],
+        "rapprochement": rappro_jours,
+    }
+    JEU.parent.mkdir(parents=True, exist_ok=True)
+    JEU.write_text(json.dumps(jeu, ensure_ascii=False, separators=(",", ":"), allow_nan=False),
+                   encoding="utf-8")
+
     print(f"  {F_MP.name}")
     print(f"    Validations / mises en forme x14 reportées : "
           f"{sum(i['validations x14'] for i in inv.values())} / "
@@ -679,6 +755,8 @@ def main():
     print(f"    Journal_achats        : {ajoutees} lignes ajoutées")
     print(f"    Suivi_MP              : départ {depart:%m/%Y}")
     print(f"    Rapprochement_caisse  : {len(lots)} mois")
+    print(f"  {JEU.relative_to(BASE)} : {len(journal)} lignes de journal, "
+          f"{len(rappro_jours)} jours rapprochés -- à publier par 60_publier_donnees.py")
 
 
 if __name__ == "__main__":

@@ -50,6 +50,11 @@ MORCEAUX = [
     "depenses_jour",
 ]
 
+# Jeux deposes dans le meme dossier par d'autres scripts.
+PRODUITS_AILLEURS = [
+    "controle_achats.json",   # 41_controle_achats.py, page Achats matiere
+]
+
 
 def ecrire(chemin: Path, obj) -> int:
     charge = json.dumps(obj, ensure_ascii=False, separators=(",", ":"),
@@ -61,9 +66,15 @@ def ecrire(chemin: Path, obj) -> int:
 def main() -> int:
     D = json.loads(SOURCE.read_text(encoding="utf-8"))
 
+    # Le dossier est refait de zero, pour qu'un jeu disparu ne survive pas.
+    # Sauf les jeux qu'un AUTRE script y depose : les effacer ici les
+    # retirerait du site a la prochaine publication.
+    gardes = {f: (CIBLE / f).read_bytes() for f in PRODUITS_AILLEURS if (CIBLE / f).exists()}
     if CIBLE.exists():
         shutil.rmtree(CIBLE)
     CIBLE.mkdir(parents=True)
+    for f, contenu in gardes.items():
+        (CIBLE / f).write_bytes(contenu)
 
     # -----------------------------------------------------------------
     # Pre-agregats : ce que la Synthese lisait dans les gros jeux

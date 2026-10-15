@@ -1521,7 +1521,201 @@ RENDER['achats'] = function(){
        affichés en gris et exclus des statistiques mensuelles. Le taux « Achats / CA »
        rapporte un achat à des ventes du même mois : un achat de fin de mois vendu le
        mois suivant le fait monter, puis descendre.`;
+
+  controleAchats(s);
 };
+
+/* =====================================================================
+   PAGE 8 bis, suite — LE CONTROLE DES ACHATS
+   ---------------------------------------------------------------------
+   Depuis les rapports mensuels de caisse, 41_controle_achats.py
+   rattache chaque sortie du tiroir a un article, un fournisseur, une
+   boisson ou une charge, et confronte la caisse a l'analyse mensuelle.
+   Le classeur du controle de gestion en garde la version corrigee ;
+   controle_achats.json en est la copie publiee.
+
+   Le jeu est FACULTATIF : il ne couvre que les mois dont on a le
+   rapport de caisse. Il n'est donc pas dans BESOINS, ou son absence
+   bloquerait toute la page : on le demande a part, et la page reste
+   entiere sans lui.
+   ===================================================================== */
+let demandeControle = null;
+let dernierPoste = null;
+const echap = s => String(s ?? '').replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function controleAchats(s){
+  dernierPoste = s;
+  const zone = document.getElementById('ac-controle');
+  if(!zone) return;
+  if(DATA.controle_achats === undefined){
+    zone.innerHTML = '<div class="foot">Chargement du contrôle des achats…</div>';
+    if(!demandeControle){
+      demandeControle = fetch(urlJeu('controle_achats'), {cache:'default'})
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null)
+        .then(j => { DATA.controle_achats = j;
+                     if(state.page === 'achats' && dernierPoste) controleAchats(dernierPoste); });
+    }
+    return;
+  }
+  const K = DATA.controle_achats;
+  if(!K){ zone.innerHTML = ''; return; }
+
+  const f = s.fam;
+  const moisCouverts = K.meta.mois.map(k => moisLabel(k+'-01')).join(', ');
+  const journal = inRange(K.journal, state.start, state.end);
+  const sorties = inRange(K.sorties, state.start, state.end);
+  const rappro = inRange(K.rapprochement, state.start, state.end);
+  if(!rappro.length && !journal.length){
+    zone.innerHTML = `<div class="note info"><div class="note-title">Contrôle des achats</div>
+      Le détail par article et le rapprochement de la caisse couvrent ${moisCouverts}
+      — les mois dont on a le rapport mensuel de caisse. La période choisie n'en contient
+      aucun jour.</div>`;
+    return;
+  }
+
+  /* --- 1. le poste, article par article --- */
+  const lignes = journal.filter(r => f.postes.includes(r.p));
+  const sortiesPoste = sorties.filter(r => f.postes.includes(r.p));
+  const totSorties = sum(sortiesPoste, 'm');
+  /* Le livre, rapporte aux seuls jours que la caisse couvre : comparer
+     un mois de caisse a trois ans de livre ne voudrait rien dire. */
+  const joursCaisse = new Set(rappro.map(r => r.d));
+  const livreCouvert = sum(s.lignes.filter(r => joursCaisse.has(r.d)), 'm');
+  const parArticle = new Map();
+  for(const r of lignes){
+    const a = parArticle.get(r.a) || {a:r.a, n:0, m:0, mq:0, q:0};
+    a.n++; a.m += r.m;
+    if(r.q){ a.q += r.q; a.mq += r.m; }
+    parArticle.set(r.a, a);
+  }
+  const articles = [...parArticle.values()].sort((x,y) => y.m - x.m);
+  const totArticles = sum(articles, 'm');
+  const sansQuantite = lignes.filter(r => !r.q).length;
+  const fiche = a => (K.articles || {})[a] || {};
+  const unite = u => u === 'unité' ? 'unité' : (u || '');
+
+  const tableArticles = !articles.length
+    ? `<div class="note warn">Aucune sortie de caisse rattachée à un article ${f.l} sur la période.
+        Les sorties de ce poste, s'il y en a, sont au nom d'un fournisseur ou d'un achat
+        générique : le classeur du contrôle de gestion dit lesquelles.</div>`
+    : tableHTML(
+      [{t:'Article'},{t:'Sorties',num:true},{t:'Montant (F)',num:true},
+       {t:'Part du poste',num:true},{t:'Quantité saisie',num:true},
+       {t:'Prix unitaire payé',num:true},{t:'Prix de référence',num:true},{t:'Écart',num:true}],
+      articles.map(x => {
+        const fi = fiche(x.a), pu = x.q ? x.mq / x.q : null;
+        const ecart = pu !== null && fi.pu ? 100 * (pu / fi.pu - 1) : null;
+        return [`<span class="strong">${echap(x.a)}</span>`, F(x.n), F(x.m),
+          P1(x.m, totArticles),
+          x.q ? F(x.q)+' '+echap(unite(fi.u)) : '—',
+          pu === null ? '—' : F2(pu)+' F',
+          fi.pu ? F2(fi.pu)+' F / '+echap(unite(fi.u)) : '—',
+          ecart === null ? '—'
+            : (Math.abs(ecart) >= 15 ? pill((ecart > 0 ? '+' : '')+F1(ecart)+' %', 'warn')
+                                     : (ecart > 0 ? '+' : '')+F1(ecart)+' %')];
+      }));
+
+  /* --- 2. la caisse face a l'analyse, mois par mois puis jour par jour --- */
+  const alerte = r => {
+    const motifs = [];
+    if(Math.abs(r.caj - r.can - r.rem) >= 1) motifs.push('CA inexpliqué');
+    if(Math.abs(r.esc - r.esa) >= 1) motifs.push('espèces');
+    if(Math.abs(r.auc - r.aua) >= 1) motifs.push('autres moyens');
+    if(r.sc > r.dl + .5) motifs.push('caisse > livre');
+    return motifs;
+  };
+  const parMois = new Map();
+  for(const r of rappro){
+    const k = moisKey(r.d);
+    const m = parMois.get(k) || {k, cac:0, caj:0, rem:0, can:0, esc:0, esa:0, auc:0, aua:0,
+                                 sc:0, dl:0, jours:0, alertes:0};
+    for(const c of ['cac','caj','rem','can','esc','esa','auc','aua','sc','dl']) m[c] += r[c];
+    m.jours++;
+    if(alerte(r).length) m.alertes++;
+    parMois.set(k, m);
+  }
+  const signe = n => (n > 0 ? '+' : '')+F(n);
+  const joursAlerte = rappro.filter(r => alerte(r).length);
+
+  const natures = groupBy(sorties, r => r.s, ['m','n']);
+  const totNatures = sum(sorties, 'm');
+  const ORDRE_NATURES = ['Article','Fournisseur (non détaillé)','Générique (non attribuable)',
+                         'Boisson','Charge','À classer'];
+
+  zone.innerHTML = `
+  <div class="card" style="margin-top:14px">
+    <h3>${f.l} article par article : les sorties de caisse</h3>
+    <div class="sub">Couvre ${moisCouverts}. La caisse ne nomme qu'un compte de sortie ;
+      le contrôle de gestion le rattache à un article dans son classeur. Elle ne voit que
+      ce qui sort du tiroir : les achats réglés par virement ou mobile money n'y sont pas.</div>
+    <div class="grid g3" style="margin:12px 0">
+      ${tuile({k:'SORTIES DE CAISSE '+f.l.toUpperCase(), v:Fc1(totSorties), u:'F',
+               d:`${F(sum(sortiesPoste,'n'))} sorties sur ${F(joursCaisse.size)} jours de caisse`})}
+      ${tuile({k:'DONT RATTACHÉES À UN ARTICLE', v:Fc1(totArticles), u:'F',
+               part:{v:totArticles, total:totSorties, c:f.c},
+               d:totSorties ? P1(totArticles, totSorties)+' des sorties du poste' : '—'})}
+      ${tuile({k:'PART DU LIVRE PASSÉE PAR LA CAISSE', v:livreCouvert ? F1(PCT(totSorties, livreCouvert)) : '—',
+               u:livreCouvert ? '%' : '',
+               cls:totSorties > livreCouvert + .5 ? 'warn' : '',
+               d:`livre ${f.l} sur les mêmes jours : ${F(livreCouvert)} F`
+                 + (totSorties > livreCouvert + .5 ? '<br><strong>la caisse sort plus que le livre ne note</strong>' : '')})}
+    </div>
+    <div class="scroll-y" id="ac-articles">${tableArticles}</div>
+    <div class="foot">${sansQuantite
+      ? `${F(sansQuantite)} sortie${sansQuantite > 1 ? 's' : ''} sur ${F(lignes.length)} sans quantité :
+         la caisse ne la donne pas. Le prix unitaire payé n'apparaît qu'une fois la quantité
+         saisie dans l'onglet Journal_achats du classeur.`
+      : 'Toutes les sorties portent une quantité.'}
+      Prix de référence : onglet Achats du classeur (dernier prix connu, perte déduite) ;
+      un écart de 15 % ou plus est signalé.
+      ${K.meta.hypotheses ? `${F(K.meta.hypotheses)} rattachements restent des hypothèses à confirmer.` : ''}
+      ${K.meta.a_classer ? `${F(K.meta.a_classer)} compte${K.meta.a_classer > 1 ? 's' : ''} de caisse
+        reste${K.meta.a_classer > 1 ? 'nt' : ''} à classer.` : ''}</div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>Ce que sont les sorties de caisse</h3>
+      <div class="sub">Tous postes confondus, sur la période. Seules les sorties rattachées à
+        un article alimentent le détail ci-dessus.</div>
+      ${tableHTML([{t:'Nature'},{t:'Sorties',num:true},{t:'Montant (F)',num:true},{t:'Part',num:true}],
+        ORDRE_NATURES.filter(n => natures.has(n)).map(n => [
+          n === 'À classer' ? pill(n, 'warn') : n, F(natures.get(n).n), F(natures.get(n).m),
+          P1(natures.get(n).m, totNatures)]))}
+    </div>
+    <div class="card">
+      <h3>La caisse face à l'analyse mensuelle</h3>
+      <div class="sub">L'analyse mensuelle fait foi ; la caisse a pu être corrigée après coup.
+        Rien n'est corrigé ici : on montre où la caisse s'écarte, et de combien.</div>
+      ${tableHTML([{t:'Mois'},{t:'CA caisse (F)',num:true},{t:'CA analyse (F)',num:true},
+                   {t:'Écart',num:true},{t:'dont remises',num:true},{t:'Écart espèces',num:true},
+                   {t:'Sorties / livre',num:true},{t:'Jours en alerte',num:true}],
+        [...parMois.values()].map(m => [
+          `<span class="strong">${moisLabel(m.k+'-01')}</span>`, F(m.cac), F(m.can),
+          signe(m.cac - m.can), signe(m.rem), signe(m.esc - m.esa),
+          m.dl ? P1(m.sc, m.dl) : '—',
+          m.alertes ? pill(F(m.alertes)+' / '+F(m.jours), 'warn') : '0 / '+F(m.jours)]))}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Les jours où la caisse s'écarte de l'analyse</h3>
+    <div class="sub">« CA inexpliqué » : écart de CA qui ne vient ni des remises sur ticket ni
+      d'une différence entre les journaux de la caisse. « Caisse > livre » : le tiroir a sorti
+      plus que le livre de dépenses n'en note ce jour-là.</div>
+    ${joursAlerte.length ? `<div class="scroll-y" id="ac-rappro">${tableHTML(
+      [{t:'Date'},{t:'CA inexpliqué (F)',num:true},{t:'Écart espèces (F)',num:true},
+       {t:'Écart autres moyens (F)',num:true},{t:'Sorties de caisse (F)',num:true},
+       {t:'Dépenses du livre (F)',num:true},{t:'Motif'}],
+      joursAlerte.map(r => [dateLabel(r.d), signe(r.caj - r.can - r.rem), signe(r.esc - r.esa),
+        signe(r.auc - r.aua), F(r.sc), F(r.dl), alerte(r).join(' · ')]))}</div>`
+      : '<div class="note good">Aucun jour en écart sur la période.</div>'}
+    <div class="foot">Données de caisse extraites le ${echap(K.meta.genere_le)}.</div>
+  </div>`;
+  if(joursAlerte.length) rendreFiltrable('ac-rappro', 'Filtrer : espèces, caisse > livre, sept…');
+}
 
 /* =====================================================================
    PAGE 9 — REMISES & OFFERTS
