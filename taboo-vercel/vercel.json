@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "python3 ../assembleur.py",
+  "outputDirectory": ".",
   "cleanUrls": true,
   "rewrites": [
     { "source": "/donnees/:etab/:fichier",
