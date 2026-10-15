@@ -38,6 +38,7 @@ les achats regles par virement ou mobile money n'y figurent pas.
 
 import importlib.util
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from datetime import date, datetime
@@ -158,6 +159,160 @@ def jours_du_lot(lot):
     """Les dates calendaires couvertes par un rapport mensuel (journal de vente)."""
     return sorted({d.date() for d in (X.date_heure(r["Date"], "%d/%m/%Y %H:%M:%S")
                                       for r in lot["ventes"]) if d})
+
+
+# -----------------------------------------------------------------
+# Enregistrer sans rien perdre de ce qu'Excel a ajoute
+# -----------------------------------------------------------------
+# Une validation ou une mise en forme conditionnelle qui pointe vers un AUTRE
+# onglet (liste d'articles = Achats!$B$6:$B$134, seuils = Parametres!$B$10),
+# Excel l'enregistre dans une extension x14, en fin de feuille. openpyxl ne
+# relit pas ces extensions : un simple load/save les efface sans un mot, et
+# avec elles les listes deroulantes d'articles et les alertes de Fiches_cout.
+# On les reporte donc telles quelles du fichier d'origine vers le fichier
+# ecrit, puis on recompte : s'il manque quoi que ce soit, le classeur n'est
+# pas remplace.
+NS_XL = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+         "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+         "x14": "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main",
+         "pr": "http://schemas.openxmlformats.org/package/2006/relationships"}
+EXT_RECONDUITES = {"{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}": "validations x14",
+                   "{78C0D931-6437-407d-A8EE-F0AAD7539E65}": "mises en forme conditionnelles x14"}
+
+
+def _parties_onglets(z):
+    """Nom d'onglet -> chemin de sa feuille dans le paquet xlsx."""
+    import posixpath
+    import xml.etree.ElementTree as ET
+    wb = ET.fromstring(z.read("xl/workbook.xml"))
+    rels = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
+    cible = {r.get("Id"): r.get("Target") for r in rels.findall("pr:Relationship", NS_XL)}
+    parties = {}
+    for s in wb.find("m:sheets", NS_XL):
+        t = cible[s.get(f"{{{NS_XL['r']}}}id")]
+        parties[s.get("name")] = t.lstrip("/") if t.startswith("/") else posixpath.join("xl", t)
+    return parties
+
+
+def inventaire_classeur(chemin):
+    """Par onglet : validations et regles de mise en forme, standard et x14 ;
+    et les types de contenu du paquet (graphiques, images, tableaux...)."""
+    import xml.etree.ElementTree as ET
+    import zipfile
+    onglets = {}
+    with zipfile.ZipFile(chemin) as z:
+        for nom, partie in _parties_onglets(z).items():
+            x = ET.fromstring(z.read(partie))
+            onglets[nom] = {
+                "validations": len(x.findall("m:dataValidations/m:dataValidation", NS_XL)),
+                "validations x14": len(x.findall(
+                    "m:extLst/m:ext/x14:dataValidations/x14:dataValidation", NS_XL)),
+                "mises en forme": len(x.findall("m:conditionalFormatting/m:cfRule", NS_XL)),
+                "mises en forme x14": len(x.findall(
+                    "m:extLst/m:ext/x14:conditionalFormattings/x14:conditionalFormatting/x14:cfRule",
+                    NS_XL)),
+                "extensions": [e.get("uri") for e in x.findall("m:extLst/m:ext", NS_XL)]}
+        types = {o.get("ContentType") for o in ET.fromstring(z.read("[Content_Types].xml"))
+                 if o.get("ContentType")}
+    return onglets, types
+
+
+def enregistrer_sans_perte(wb, chemin, recrees):
+    """Enregistre wb a la place de chemin sans perdre les extensions x14.
+
+    Les onglets de `recrees` sont reecrits de zero par ce script : on n'y reporte
+    rien, mais leurs validations et mises en forme ne doivent pas etre moins
+    nombreuses qu'avant (Excel les avait seulement passees en x14). Pour les
+    autres, chaque compte doit etre au moins celui d'avant."""
+    import os
+    import zipfile
+
+    avant, types_avant = inventaire_classeur(chemin)
+    inconnues = [(o, u) for o, i in avant.items() if o not in recrees
+                 for u in i["extensions"] if u not in EXT_RECONDUITES]
+    if inconnues:
+        raise SystemExit(
+            "Classeur non modifié : il contient des extensions Excel qu'openpyxl effacerait "
+            "et que ce script ne sait pas reporter : "
+            + ", ".join(f"{o} {u}" for o, u in inconnues)
+            + ". Si elles se reportent telles quelles, ajouter leur uri à EXT_RECONDUITES.")
+    # Chaque extension est reprise octet pour octet ; seuls s'y ajoutent les
+    # espaces de noms qu'elle emprunte a la racine de sa feuille (xr:uid...).
+    extensions = {}
+    with zipfile.ZipFile(chemin) as z:
+        for nom, partie in _parties_onglets(z).items():
+            if nom in recrees:
+                continue
+            xml = z.read(partie).decode("utf-8")
+            if "<extLst>" not in xml:
+                continue
+            racine = dict(re.findall(r'xmlns:(\w+)="([^"]+)"', re.search(r"<worksheet\b[^>]*>", xml)[0]))
+            fin = xml[xml.rfind("<extLst>"):]
+            extensions[nom] = []
+            for m in re.finditer(r'<ext\b[^>]*\buri="([^"]+)"[^>]*>.*?</ext>', fin, re.S):
+                if m[1] not in EXT_RECONDUITES:
+                    continue
+                bloc = m[0]
+                manquants = (set(re.findall(r'</?(\w+):\w', bloc)) | set(re.findall(r'\s(\w+):\w+=', bloc))) \
+                    - set(re.findall(r'xmlns:(\w+)=', bloc)) - {"xmlns"}
+                if manquants - set(racine):
+                    raise SystemExit(f"Classeur non modifié : extension {m[1]} de {nom} illisible "
+                                     f"(préfixes {sorted(manquants - set(racine))}).")
+                decl = "".join(f' xmlns:{p}="{racine[p]}"' for p in sorted(manquants))
+                extensions[nom].append((m[1], bloc.replace("<ext ", f"<ext{decl} ", 1)))
+
+    brut = chemin.with_name(chemin.stem + ".openpyxl.tmp")
+    final = chemin.with_name(chemin.stem + ".en_cours.tmp")
+    try:
+        wb.save(brut)
+        with zipfile.ZipFile(brut) as zs, zipfile.ZipFile(final, "w", zipfile.ZIP_DEFLATED) as zd:
+            parties = {p: n for n, p in _parties_onglets(zs).items()}
+            for info in zs.infolist():
+                donnees = zs.read(info)
+                nom = parties.get(info.filename)
+                a_reporter = extensions.get(nom) if nom else None
+                if a_reporter:
+                    xml = donnees.decode("utf-8")
+                    deja = set(re.findall(r'<ext [^>]*uri="([^"]+)"', xml))
+                    bloc = "".join(b for u, b in a_reporter if u not in deja)
+                    if "</extLst></worksheet>" in xml:
+                        xml = xml.replace("</extLst></worksheet>", bloc + "</extLst></worksheet>")
+                    else:
+                        xml = xml.replace("</worksheet>", f"<extLst>{bloc}</extLst></worksheet>")
+                    donnees = xml.encode("utf-8")
+                zd.writestr(info, donnees)
+
+        apres, types_apres = inventaire_classeur(final)
+        pertes = []
+        for nom, i in avant.items():
+            j = apres.get(nom)
+            if j is None:
+                pertes.append(f"onglet {nom}")
+                continue
+            if nom in recrees:
+                for genre in ("validations", "mises en forme"):
+                    if j[genre] + j[genre + " x14"] < i[genre] + i[genre + " x14"]:
+                        pertes.append(f"{nom} : {genre} {i[genre] + i[genre + ' x14']} -> "
+                                      f"{j[genre] + j[genre + ' x14']}")
+            else:
+                for genre in ("validations", "validations x14", "mises en forme",
+                              "mises en forme x14"):
+                    if j[genre] < i[genre]:
+                        pertes.append(f"{nom} : {genre} {i[genre]} -> {j[genre]}")
+        # La chaine de calcul, Excel la reconstruit, et openpyxl ecrit les textes
+        # dans les cellules plutot qu'en table partagee ; tout autre type de
+        # contenu disparu (graphique, image, tableau...) est une perte.
+        pertes += [f"partie {t}" for t in sorted(types_avant - types_apres)
+                   if not t.endswith(("calcChain+xml", "sharedStrings+xml"))]
+        if pertes:
+            raise SystemExit("Classeur non modifié : l'enregistrement perdrait "
+                             + " ; ".join(pertes))
+        os.replace(final, chemin)
+    finally:
+        for f in (brut, final):
+            if f.exists():
+                f.unlink()
+    return apres
 
 
 def main():
@@ -512,8 +667,11 @@ def main():
         ligne += 3
     wr.freeze_panes = "B6"
 
-    wb.save(F_MP)
+    inv = enregistrer_sans_perte(wb, F_MP, {NOM_CORR, NOM_RAP})
     print(f"  {F_MP.name}")
+    print(f"    Validations / mises en forme x14 reportées : "
+          f"{sum(i['validations x14'] for i in inv.values())} / "
+          f"{sum(i['mises en forme x14'] for i in inv.values())}")
     print(f"    Correspondance_caisse : {len(ordre)} comptes "
           f"({sum(1 for c in ordre if choix[c][0] == ARTICLE)} rattachés à un article, "
           f"{sum(1 for c in ordre if choix[c][0] == A_CLASSER)} à classer, "
