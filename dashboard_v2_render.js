@@ -1229,6 +1229,301 @@ RENDER['depenses'] = function(){
 };
 
 /* =====================================================================
+   PAGE 8 bis — ACHATS MATIERE
+   ---------------------------------------------------------------------
+   Trois questions de la direction, posees poste par poste :
+     1. combien a-t-on achete, et avec quelles variations ;
+     2. a quel rythme, et ce rythme change-t-il ;
+     3. les achats suivent-ils les ventes de l'activite qu'ils servent.
+
+   Le livre de depenses est tenu par POSTE, pas par article : l'huile,
+   le gigot ou le charbon sont fondus dans EAT et SMOKE. La page repond
+   donc au grain du poste ; le grain article viendra de la feuille de
+   saisie des achats.
+
+   Le gaz est ISOLE de EAT ici, alors que la page Marge les additionne
+   -- c'est la regle du compte de resultat. Les deux sont justes : la
+   marge veut tout ce que coute la cuisine, cette page veut voir chaque
+   achat pour ce qu'il est.
+
+   MIAMI 228 et PICASSO suivent la regle de l'extraction : achats de
+   bar, donc DRINK. Ils restent nommes en pied de page pour qu'on sache
+   ce que contient le poste.
+   ===================================================================== */
+const FAMILLES_ACHAT = [
+  {id:'EAT',     l:'EAT',     postes:['EAT'],                       act:'EAT',   c:C.EAT},
+  {id:'GAZ',     l:'Gaz',     postes:['GAZ'],                       act:'EAT',   c:C.cat[3]},
+  {id:'DRINK',   l:'DRINK',   postes:['DRINK','MIAMI 228','PICASSO'], act:'DRINK', c:C.DRINK},
+  {id:'GLACONS', l:'Glaçons', postes:['GLACONS'],                   act:'DRINK', c:C.cat[4]},
+  {id:'SMOKE',   l:'SMOKE',   postes:['SMOKE'],                     act:'SMOKE', c:C.SMOKE},
+];
+
+/* Quantile par interpolation lineaire, sur une copie triee. */
+function quantile(xs, q){
+  if(!xs.length) return null;
+  const s = [...xs].sort((a,b)=>a-b), p = (s.length-1)*q, i = Math.floor(p);
+  return s[i] + (s[Math.min(i+1, s.length-1)] - s[i]) * (p - i);
+}
+/* Coefficient de Pearson. Sous six points, il ne dit rien de fiable :
+   on prefere ne rien afficher qu'un chiffre qui a l'air d'une preuve. */
+function correlation(xs, ys){
+  const n = xs.length;
+  if(n < 6) return null;
+  const mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+  let sxy = 0, sxx = 0, syy = 0;
+  for(let i=0;i<n;i++){
+    const dx = xs[i]-mx, dy = ys[i]-my;
+    sxy += dx*dy; sxx += dx*dx; syy += dy*dy;
+  }
+  return sxx && syy ? sxy/Math.sqrt(sxx*syy) : null;
+}
+const isoDate = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')
+                     +'-'+String(d.getDate()).padStart(2,'0');
+/* Un mois coupe par le filtre ne se compare pas a un mois entier : ses
+   achats et ses ventes sont partiels, et pas dans la meme proportion. */
+function moisComplet(k){
+  const d = dOf(k+'-01');
+  return state.start <= k+'-01'
+      && state.end >= isoDate(new Date(d.getFullYear(), d.getMonth()+1, 0));
+}
+/* Format compact a une decimale entre un et dix millions. Fc arrondit au
+   million : un mois de 2,4 M et un de 3,4 M s'y lisaient « 2 M » et
+   « 3 M », et l'axe affichait deux fois chaque graduation. */
+const Fc1 = n => Math.abs(n||0) >= 1e6 && Math.abs(n||0) < 1e7
+  ? NF1.format(n/1e6)+' M' : Fc(n);
+const lienVentes = r => r === null ? 'trop peu de mois'
+  : (r >= .8 ? 'fort' : (r >= .5 ? 'moyen' : 'faible'));
+
+function statsAchat(fam, dep, res){
+  const lignes = dep.filter(r => fam.postes.includes(r.p));
+  const ventes = res.filter(r => r.a === fam.act);
+  const jours = [...new Set(lignes.map(r=>r.d))].sort();
+  const ecarts = [];
+  let absence = null;
+  for(let i=1;i<jours.length;i++){
+    const e = Math.round((dOf(jours[i]) - dOf(jours[i-1])) / 864e5);
+    ecarts.push(e);
+    if(!absence || e > absence.j) absence = {j:e, de:jours[i-1], a:jours[i]};
+  }
+
+  const parM = groupBy(lignes, r=>moisKey(r.d), ['m']);
+  const caM = groupBy(ventes, r=>moisKey(r.d), ['cn']);
+  const joursM = new Map();
+  for(const j of jours) joursM.set(moisKey(j), (joursM.get(moisKey(j))||0) + 1);
+  const ks = [...new Set([...parM.keys(), ...caM.keys()])].sort();
+  const mois = ks.map(k => {
+    const m = (parM.get(k)||{m:0}).m, cn = (caM.get(k)||{cn:0}).cn;
+    return {k, lab:moisLabel(k+'-01'), m, cn, n:joursM.get(k)||0,
+            ratio:cn ? PCT(m,cn) : null, complet:moisComplet(k)};
+  });
+  /* Les statistiques mensuelles portent sur les mois complets. Sur une
+     periode trop courte pour en avoir trois, on garde tous les mois
+     plutot que de ne rien dire -- et la tuile le signale. */
+  const complets = mois.filter(x=>x.complet);
+  const base = complets.length >= 3 ? complets : mois;
+  const montants = base.map(x=>x.m);
+  const ratios = base.filter(x=>x.ratio !== null).map(x=>x.ratio);
+  const bas = base.reduce((a,x)=>(!a || x.m < a.m) ? x : a, null);
+  const haut = base.reduce((a,x)=>(!a || x.m > a.m) ? x : a, null);
+
+  const total = sum(lignes,'m'), cn = sum(ventes,'cn');
+  return {fam, lignes, total, cn, jours, ecarts, absence, mois, base,
+    approx: complets.length < 3,
+    nbAchats: lignes.length,
+    ecartMed: quantile(ecarts,.5),
+    mMed: quantile(montants,.5), mP25: quantile(montants,.25), mP75: quantile(montants,.75),
+    bas, haut,
+    rMed: quantile(ratios,.5), rP25: quantile(ratios,.25), rP75: quantile(ratios,.75),
+    r: correlation(base.map(x=>x.cn), base.map(x=>x.m))};
+}
+
+RENDER['achats'] = function(){
+  const dep = inRange(DATA.depenses_jour, state.start, state.end)
+                .filter(r => r.n === 'ACHATS EXTERNES');
+  const res = resPeriode();
+  const toutes = FAMILLES_ACHAT.map(f => statsAchat(f, dep, res));
+  if(!toutes.some(s => s.fam.id === state.achat)) state.achat = 'EAT';
+  const s = toutes.find(x => x.fam.id === state.achat), f = s.fam;
+  const rythme = x => x.ecartMed === null ? '—'
+    : (x.ecartMed <= 1 ? 'chaque jour' : 'tous les '+F(x.ecartMed)+' j');
+
+  /* --- les cinq postes, une ligne chacun --- */
+  document.getElementById('ac-resume').innerHTML = tableHTML(
+    [{t:'Poste'},{t:'Activité servie'},{t:'Montant (F)',num:true},
+     {t:"% du CA de l'activité",num:true},{t:"Jours d'achat",num:true},
+     {t:'Rythme médian',num:true},{t:'Plus longue absence',num:true},
+     {t:'Mois habituel (F)',num:true},{t:'Achats / CA, mois habituels',num:true},
+     {t:'Lien avec les ventes',num:true}],
+    toutes.map(x => [
+      `<span class="strong" style="border-left:3px solid ${x.fam.c};padding-left:7px">${x.fam.l}</span>`,
+      x.fam.act, F(x.total), x.cn ? P1(x.total, x.cn) : '—', F(x.jours.length),
+      rythme(x), x.absence ? F(x.absence.j)+' j' : '—',
+      x.mP25 === null ? '—' : Fc1(x.mP25)+' à '+Fc1(x.mP75),
+      x.rP25 === null ? '—' : F1(x.rP25)+' à '+F1(x.rP75)+' %',
+      x.r === null ? '—' : 'r = '+F2(x.r)+' · '+lienVentes(x.r)]));
+
+  /* --- le selecteur --- */
+  const choix = document.getElementById('ac-choix');
+  choix.innerHTML = FAMILLES_ACHAT.map(x =>
+    `<button class="btn${x.id===state.achat?' on':''}" data-achat="${x.id}"
+       aria-pressed="${x.id===state.achat}">${x.l}</button>`).join('');
+  choix.onclick = ev => {
+    const b = ev.target.closest('[data-achat]');
+    if(!b || b.dataset.achat === state.achat) return;
+    state.achat = b.dataset.achat;
+    render('achats');
+  };
+
+  /* --- les quatre reponses, en tuiles --- */
+  const lab = k => moisLabel(k+'-01');
+  document.getElementById('ac-kpi').innerHTML = !s.lignes.length
+    ? `<div class="note warn" style="grid-column:1/-1">Aucun achat ${f.l} saisi sur la période.</div>`
+    : [
+    tuile({k:'MONTANT ACHETÉ', v:Fc1(s.total), u:'F', hero:true,
+           part:{v:s.total, total:s.cn, c:f.c},
+           d:`${F(s.total)} F · <strong>${P1(s.total,s.cn)}</strong> du CA net ${f.act}<br>
+              ${F(s.nbAchats)} saisies sur ${F(s.jours.length)} jours`}),
+    tuile({k:'UN MOIS HABITUEL', v:Fc1(s.mMed), u:'F',
+           d:`entre ${Fc1(s.mP25)} et ${Fc1(s.mP75)} F la moitié du temps<br>
+              de ${Fc1(s.bas.m)} F (${s.bas.lab}) à ${Fc1(s.haut.m)} F (${s.haut.lab})`
+              + (s.approx ? '<br>période courte : mois incomplets inclus' : '')}),
+    tuile({k:"RYTHME D'ACHAT", v:s.ecartMed === null ? '—'
+             : (s.ecartMed <= 1 ? 'chaque jour' : F(s.ecartMed)+' j'),
+           d:(s.ecartMed > 1 ? 'entre deux achats, en médiane<br>' : 'ou presque<br>')
+             + (s.absence ? `plus longue absence ${F(s.absence.j)} j, du ${dateLabel(s.absence.de)}
+                au ${dateLabel(s.absence.a)}<br>` : '')
+             + `dernier achat le ${dateLabel(s.jours[s.jours.length-1])}`}),
+    tuile({k:'ACHATS / VENTES', v:F1(PCT(s.total,s.cn)), u:'%',
+           cls:s.r !== null && s.r < .5 ? 'warn' : '',
+           d:s.rP25 === null ? 'pas de vente sur la période'
+             : `${F1(s.rP25)} à ${F1(s.rP75)} % les mois habituels<br>
+                lien avec les ventes : ${s.r === null ? 'trop peu de mois'
+                  : '<strong>'+lienVentes(s.r)+'</strong> (r = '+F2(s.r)+')'}`}),
+  ].join('');
+
+  /* --- le constat ecrit : les mois a expliquer --- */
+  const atypiques = s.rMed ? s.base.filter(x => x.cn > 0 && x.complet
+      && (x.ratio > 1.5*s.rMed || x.ratio < .5*s.rMed)) : [];
+  const sansAchat = s.base.filter(x => x.complet && x.cn > 0 && x.m === 0);
+  /* Une absence qu'aucun poste ne vient interrompre n'est pas une
+     absence d'achat : c'est un trou dans le livre de depenses. La
+     confondre avec un arret des approvisionnements ferait instruire la
+     mauvaise question. */
+  const trouSaisie = s.absence
+    && !DATA.depenses_jour.some(r => r.d > s.absence.de && r.d < s.absence.a);
+  /* Un poste achete par lots -- le gaz, en bouteilles -- tombe par
+     paquets dans les mois : deux achats un mois, un seul le suivant. Le
+     taux mensuel oscille alors sans que la consommation change, et le
+     lien avec les ventes s'en trouve mecaniquement affaibli. */
+  const parLots = s.ecartMed !== null && s.ecartMed >= 7;
+  document.getElementById('ac-constat').innerHTML = !s.lignes.length ? '' : `
+    <div class="note ${atypiques.length ? 'warn' : 'good'}">
+      <div class="note-title">${f.l} : ce que disent les chiffres sur la période</div>
+      <strong>1.</strong> ${F(s.total)} F achetés, soit ${P1(s.total,s.cn)} du CA net ${f.act} ;
+      un mois habituel se situe entre ${F(s.mP25)} et ${F(s.mP75)} F.
+      <strong>2.</strong> ${s.ecartMed <= 1 ? 'Le poste est réapprovisionné presque chaque jour'
+        : 'Un achat tous les '+F(s.ecartMed)+' jours en médiane'}${s.absence
+        ? ', avec au plus '+F(s.absence.j)+' jours sans achat' : ''}.
+      <strong>3.</strong> ${s.r === null ? 'Trop peu de mois complets pour juger le lien avec les ventes.'
+        : 'Le lien entre achats et ventes est <strong>'+lienVentes(s.r)+'</strong> (r = '+F2(s.r)+').'}
+      ${parLots ? `Acheté par lots, environ tous les ${F(s.ecartMed)} jours, ce poste tombe
+        par paquets : un mois à deux achats et un mois à un seul font varier le taux sans
+        que la consommation ait changé. Il se juge sur plusieurs mois, pas sur un seul.` : ''}
+      ${atypiques.length
+        ? `Mois dont le taux s'écarte de plus de moitié de la médiane (${F1(s.rMed)} %) :
+           <strong>${atypiques.map(x=>x.lab+' '+F1(x.ratio)+' %').join(' · ')}</strong>.`
+        : `Aucun mois complet ne s'écarte de plus de moitié du taux médian (${F1(s.rMed||0)} %).`}
+      ${sansAchat.length ? `<br>Mois sans aucun achat saisi malgré des ventes :
+        <strong>${sansAchat.map(x=>x.lab).join(', ')}</strong> — à vérifier dans le livre de dépenses.` : ''}
+      ${trouSaisie ? `<br>Les ${F(s.absence.j)} jours sans achat, du ${dateLabel(s.absence.de)}
+        au ${dateLabel(s.absence.a)}, ne portent <strong>aucune dépense, sur aucun poste</strong> :
+        c'est plus probablement un trou de saisie du livre de dépenses qu'un arrêt des
+        approvisionnements.` : ''}
+    </div>`;
+
+  /* --- 1. montant par mois --- */
+  setChart('c-ac-mens', {type:'bar',
+    data:{labels:s.mois.map(x=>x.lab), datasets:[Object.assign({},BAR,{
+      label:'Achats '+f.l, data:s.mois.map(x=>x.m),
+      backgroundColor:s.mois.map(x=>x.complet ? f.c : C.faint)})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{callbacks:{
+      label:c=>{const x=s.mois[c.dataIndex];
+        return [' '+FCFA(x.m), ' '+F(x.n)+" jours d'achat",
+                x.complet ? '' : ' mois incomplet sur la période'].filter(Boolean);}}})},
+      scales:{x:axisX(), y:axisY(Fc1)}},
+    plugins:s.mP25 === null ? [] : [bandePlugin(s.mP25, s.mP75, 'mois habituels')]});
+  document.getElementById('ac-mens-t').innerHTML = tableHTML(
+    [{t:'Mois'},{t:'Achats (F)',num:true},{t:"Jours d'achat",num:true}],
+    s.mois.map(x=>[x.lab+(x.complet?'':' *'), F(x.m), F(x.n)]));
+
+  /* --- 2. frequence : jours d'achat par mois, puis intervalles --- */
+  setChart('c-ac-freq', {type:'bar',
+    data:{labels:s.mois.map(x=>x.lab), datasets:[Object.assign({},BAR,{
+      label:"Jours d'achat", data:s.mois.map(x=>x.n),
+      backgroundColor:s.mois.map(x=>x.complet ? f.c : C.faint)})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{callbacks:{
+      label:c=>' '+F(c.parsed.y)+" jours d'achat"}})},
+      scales:{x:axisX(), y:Object.assign(axisY(v=>F(v)),{beginAtZero:true})}}});
+
+  /* Libelles courts, l'unite dans le titre de l'axe : « 15 a 21 j »
+     repete huit fois se chevauchait sur un ecran de telephone. */
+  const TRANCHES = [[1,1,'1'],[2,2,'2'],[3,3,'3'],[4,7,'4–7'],
+    [8,14,'8–14'],[15,21,'15–21'],[22,31,'22–31'],[32,Infinity,'> 31']];
+  const parTranche = TRANCHES.map(([a,b]) => s.ecarts.filter(e => e>=a && e<=b).length);
+  setChart('c-ac-ecarts', {type:'bar',
+    data:{labels:TRANCHES.map(t=>t[2]), datasets:[Object.assign({},BAR,{
+      label:'Intervalles', data:parTranche, backgroundColor:f.c})]},
+    options:{plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{callbacks:{
+      title:it=>it[0].label+' jours entre deux achats',
+      label:c=>' '+F(c.parsed.y)+' fois'}})},
+      scales:{x:axisX({ticks:{color:C.dim, maxRotation:0, autoSkip:false, font:{size:10.5}},
+                       title:{display:true, text:'jours entre deux achats',
+                              color:C.faint, font:{size:10.5}}}),
+              y:Object.assign(axisY(v=>F(v)),{beginAtZero:true})}},
+    plugins:[pctBarres('x', 0)]});
+
+  /* --- 3. achats rapportes aux ventes --- */
+  setChart('c-ac-ratio', {type:'line',
+    data:{labels:s.mois.map(x=>x.lab), datasets:[Object.assign({},LINE,{
+      label:'Achats / CA net '+f.act, data:s.mois.map(x=>x.ratio),
+      borderColor:f.c, backgroundColor:f.c, pointBackgroundColor:f.c,
+      pointRadius:s.mois.length <= 18 ? 3 : 0, spanGaps:true})]},
+    options:{interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false}, tooltip:Object.assign({},TOOLTIP,{callbacks:{
+        label:c=>{const x=s.mois[c.dataIndex];
+          return c.parsed.y === null ? null
+            : [' '+F1(c.parsed.y)+' % du CA net '+f.act,
+               ' achats '+FCFA(x.m)+' · CA '+FCFA(x.cn),
+               x.complet ? '' : ' mois incomplet sur la période'].filter(Boolean);}}})},
+      scales:{x:axisX(), y:Object.assign(axisY(v=>F(v)+' %'),{beginAtZero:true})}},
+    plugins:s.rP25 === null ? [] : [bandePlugin(s.rP25, s.rP75, 'mois habituels')]});
+
+  /* --- detail --- */
+  document.getElementById('ac-table').innerHTML = tableHTML(
+    [{t:'Mois'},{t:'CA net '+f.act+' (F)',num:true},{t:'Achats '+f.l+' (F)',num:true},
+     {t:'Achats / CA',num:true},{t:"Jours d'achat",num:true},{t:'Moyenne par jour d\'achat (F)',num:true},
+     {t:'',num:false}],
+    [...s.mois].reverse().map(x=>[
+      `<span class="strong">${x.lab}</span>${x.complet?'':' <span class="foot">incomplet</span>'}`,
+      F(x.cn), F(x.m), x.ratio === null ? '—' : F1(x.ratio)+' %', F(x.n),
+      x.n ? F(x.m/x.n) : '—',
+      x.ratio === null || !s.rMed ? ''
+        : (x.complet && (x.ratio > 1.5*s.rMed || x.ratio < .5*s.rMed)
+            ? pill('À EXPLIQUER','warn') : '')]));
+  rendreFiltrable('ac-table', 'Filtrer : mars 25, août, À EXPLIQUER…');
+
+  const sous = f.postes.length > 1
+    ? f.postes.map(p => p+' '+F(sum(s.lignes.filter(r=>r.p===p),'m'))+' F').join(' · ')
+    : '';
+  document.getElementById('ac-foot').innerHTML =
+    (sous ? `Le poste ${f.l} regroupe les colonnes du livre de dépenses : ${sous}. ` : '')
+    + `Les mois marqués « incomplet » sont coupés par le filtre de dates ; ils sont
+       affichés en gris et exclus des statistiques mensuelles. Le taux « Achats / CA »
+       rapporte un achat à des ventes du même mois : un achat de fin de mois vendu le
+       mois suivant le fait monter, puis descendre.`;
+};
+
+/* =====================================================================
    PAGE 9 — REMISES & OFFERTS
    ===================================================================== */
 RENDER['commercial'] = function(){

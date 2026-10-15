@@ -415,6 +415,81 @@
 </section>
 
 <!-- ==================================================================
+     PAGE 8 bis — ACHATS MATIERE
+     ================================================================== -->
+<section class="page" id="page-achats">
+  <div class="note info">
+    <div class="note-title">Ce que cette page peut dire, et ce qu'elle ne peut pas encore dire</div>
+    Le livre de dépenses est tenu <strong>par poste</strong>, pas par article : l'huile,
+    le gigot, le riz ou les emballages sont fondus dans le poste EAT, les fruits et les
+    sirops dans DRINK, le charbon et les arômes dans SMOKE. Seuls le <strong>gaz</strong>
+    et les <strong>glaçons</strong> ont leur propre colonne. Les réponses ci-dessous valent
+    donc au grain du poste ; le détail par article demandera la feuille de saisie des
+    achats. Ici, le gaz est isolé de EAT, alors que la page « Marge par activité » les
+    additionne.
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h3>Les cinq postes d'achat en un coup d'œil</h3>
+    <div class="sub">Chaque poste est rapporté au chiffre d'affaires net de l'activité qu'il
+      sert. Les mois habituels sont la moitié centrale des mois complets de la période :
+      un mois sur quatre est en dessous, un sur quatre au-dessus.</div>
+    <div id="ac-resume"></div>
+  </div>
+
+  <div class="card-head" style="margin:4px 0 12px;">
+    <div><h3 style="margin:0">Zoom sur un poste</h3></div>
+    <div class="choix-etab" id="ac-choix" role="group" aria-label="Poste d'achat"></div>
+  </div>
+
+  <div class="grid g4" id="ac-kpi"></div>
+  <div id="ac-constat"></div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-head">
+        <div><h3>1 · Montant acheté par mois</h3>
+        <div class="sub">La bande grise couvre les mois habituels. Une barre qui en sort
+          est un mois à expliquer, pas forcément une anomalie.</div></div>
+        <button class="mini" data-toggle="ac-mens-t">Voir les chiffres</button>
+      </div>
+      <div class="chart-wrap l"><canvas id="c-ac-mens"></canvas></div>
+      <div class="alt-table" id="ac-mens-t"></div>
+    </div>
+    <div class="card">
+      <h3>2 · Jours d'achat par mois</h3>
+      <div class="sub">Combien de jours du mois portent au moins un achat sur ce poste.
+        Une baisse brutale signale un changement de fournisseur, de conditionnement ou
+        de saisie.</div>
+      <div class="chart-wrap l"><canvas id="c-ac-freq"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>2 · Intervalle entre deux achats</h3>
+      <div class="sub">Nombre de fois où l'achat suivant est arrivé après tant de jours.
+        Un poste acheté tous les jours se concentre à gauche ; un poste stocké,
+        comme le gaz, s'étale vers la droite.</div>
+      <div class="chart-wrap l"><canvas id="c-ac-ecarts"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>3 · Achats rapportés aux ventes, mois par mois</h3>
+      <div class="sub">Achats du poste divisés par le CA net de l'activité servie. Un achat
+        constitue du stock : d'un mois à l'autre, le taux oscille naturellement. Ce qui
+        doit alerter, c'est un taux qui sort durablement de la bande.</div>
+      <div class="chart-wrap l"><canvas id="c-ac-ratio"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Détail mois par mois</h3>
+    <div class="scroll-y" id="ac-table"></div>
+    <div class="foot" id="ac-foot"></div>
+  </div>
+</section>
+
+<!-- ==================================================================
      PAGE 9 — REMISES & OFFERTS
      ================================================================== -->
 <section class="page" id="page-commercial">

@@ -27,6 +27,7 @@ const NAV = [
     {id:'marge', l:'Marge par activité', f:true, dot:'crit'},
     {id:'cout-revient', l:'Coût de revient', f:false, dot:'new'},
     {id:'depenses', l:'Dépenses', f:true},
+    {id:'achats', l:'Achats matière', f:true, dot:'new'},
   ]},
   {g:'Pilotage', p:[
     {id:'commercial', l:'Remises & offerts', f:true, dot:'warn'},
@@ -46,6 +47,7 @@ const META = {
   'marge':['Marge par activité',"Marge réelle calculée sur les achats effectivement engagés"],
   'cout-revient':['Coût de revient',"Marge théorique par recette, confrontée à la marge réelle"],
   'depenses':['Dépenses',"Achats externes, charges d'exploitation et investissements"],
+  'achats':['Achats matière',"Montant, rythme et proportion aux ventes, poste par poste"],
   'commercial':['Remises & offerts',"Coût total de l'effort commercial consenti"],
   'stock':['Stock & inventaire',"Stock théorique, seuils d'alerte et valorisation"],
   'caisse':['Performance caisse',"Cumul par caissier — export POS sans date, non filtrable"],
@@ -59,5 +61,6 @@ const BESOINS = {
   'ventes':     ['ventes_categorie_jour'],
   'horaires':   ['horaire_jour'],
   'depenses':   ['depenses_jour'],
+  'achats':     ['depenses_jour'],
   'commercial': ['offerts_jour'],
 };

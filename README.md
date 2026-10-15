@@ -49,18 +49,20 @@ chargé en 89–121 ms, coût BigQuery nul par utilisateur.
 
 ---
 
-## Les 12 pages
+## Les 14 pages
 
 | Page | Contenu |
 |---|---|
 | Synthèse | 4 chiffres clés, cascade du résultat, les 3 constats à retenir |
 | Compte de résultat | Cascade détaillée, composition mensuelle, par activité |
+| Explorer les ventes | Activité, puis famille, puis produit, au clic |
 | Ventes & locomotives | Courbe de concentration, catalogue des 274 articles triable |
 | Profil de la nuit | CA par tranche horaire, carte de chaleur jour × heure |
 | Règlements & créances | Espèces / mobile / carte / crédit |
 | Marge par activité | Marge réelle et coût matière face à la norme |
 | Coût de revient | Marge théorique par recette contre marge réelle |
 | Dépenses | Postes, natures, évolution mensuelle |
+| Achats matière | Gaz, EAT, DRINK, glaçons, SMOKE : montant, rythme d'achat, proportion aux ventes |
 | Remises & offerts | Coût total de l'effort commercial |
 | Stock & inventaire | Stock théorique, seuils d'alerte, valorisation |
 | Performance caisse | Comparaison entre caissiers |
@@ -104,9 +106,10 @@ deux et fausserait tous les totaux journaliers.
 20_extraction_v2.py            exports CSV -> data_v2.json
 assembleur.py                  assemblage des coquilles (TABOO + AMNESIA)
 dashboard_v2_template.html     coquille, styles, socle JS
-dashboard_v2_pages.html        balisage des 12 pages
+dashboard_v2_pages.html        balisage des 14 pages
 dashboard_v2_render.js         logique de rendu
 LISEZ-MOI_v2.md                notes de la version autonome
+40_feuille_achats.py           nomenclature -> feuille de saisie des achats par article
 
 taboo-serverless/
   config.example.env                à copier en config.env (non versionné)
@@ -163,6 +166,7 @@ il faut disposer des exports POS et des référentiels :
 | `Chiffre d'affaire globale*.csv`, `INVENTAIRE*.csv` | exports POS |
 | `Depenses TABOO*.csv` | saisie manuelle de l'établissement |
 | `couts_de_revient.csv` | fiches techniques |
+| `TABOO_Nomenclature_et_fiches_composition.xlsx` | catalogue des achats, lu par `40_feuille_achats.py` |
 
 ---
 
