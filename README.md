@@ -10,6 +10,9 @@ pré-calculé.
 Le dépôt contient la mécanique, pas les résultats : ni montants, ni taux de
 marge, ni identifiants d'infrastructure.
 
+> **Vous reprenez le projet ?** Commencer par [GUIDE_DE_REPRISE.md](GUIDE_DE_REPRISE.md) :
+> accès, préparation d'un poste, mise à jour mensuelle pas à pas, pannes fréquentes.
+
 > **Ce dépôt ne contient aucune donnée d'exploitation.** Les instantanés, les
 > exports POS et les tableaux de bord assemblés — qui embarquent le compte de
 > résultat complet — sont exclus par `.gitignore`. Voir « Données » plus bas.
@@ -91,12 +94,16 @@ du dossier.
 
 ```bash
 python 21_extraction_taboo.py && python 22_decouper.py                  # TABOO
+python 41_controle_achats.py                                            # contrôle de gestion
 python 30_extraction_amnesia.py && python 32_extraction_mensuel_amnesia.py
 python 33_couts_amnesia.py && python 31_decouper_amnesia.py             # AMNESIA
 python 60_publier_donnees.py --essai                                    # vérifier
 python 60_publier_donnees.py                                            # publier
-python 41_controle_achats.py                                            # contrôle de gestion
 ```
+
+`41_controle_achats.py` passe **après** le découpage et **avant** la
+publication : il lit `data_v2.json` et dépose `controle_achats.json`, le jeu du
+bas de la page « Achats matière », dans le dossier que `60` publie.
 
 **Un nouveau mois TABOO** : déposer le dossier du « Rapport mensuel » de la
 caisse (journal de vente, journal CAF, états des dépenses, des règlements, par
@@ -105,10 +112,12 @@ famille) comme sous-dossier de `TABOO_RAPPORTS_MENSUELS`, mettre à jour
 un mois qui recouvre des jours déjà chargés, et signale les jours manquants.
 
 **L'analyse mensuelle fait foi.** Le livre de dépenses est lu dans son onglet
-`Détail_Dépenses`, et chaque mois de caisse lui est rapproché : CA, encaissements
-par moyen de paiement, sorties de caisse face au livre. Les écarts figurent sur
-la page « Qualité des données » et, jour par jour, dans l'onglet
-`Rapprochement_caisse` du classeur du contrôle de gestion.
+`Détail_Dépenses`, et chaque mois de caisse lui est rapproché : CA, vérificateur
+de l'analyse (« Différentiel cash », qui doit valoir 0), sorties de caisse face au
+livre. Les espèces ne se comparent pas jour par jour : l'analyse déduit le cash du
+CA, la caisse date chaque paiement au jour où il est réglé. Les écarts figurent sur
+la page « Qualité des données », en bas de la page « Achats matière » et, jour par
+jour, dans l'onglet `Rapprochement_caisse` du classeur du contrôle de gestion.
 
 `python 21_extraction_taboo.py --comme-v2` ignore rapports mensuels et classeur :
 sur l'export du 26/08/2026, il redonne exactement la sortie de l'ancienne
@@ -185,6 +194,8 @@ LISEZ-MOI_v2.md                notes de la version autonome
 40_feuille_achats.py           nomenclature -> feuille de saisie des achats par article
 41_controle_achats.py          caisse -> classeur du contrôle de gestion + rapprochement
 60_publier_donnees.py          taboo-vercel/donnees/ -> table jeu_donnees (Neon)
+serveur_local.py               le site sur ce poste, sans Vercel ni Neon (fausse session)
+GUIDE_DE_REPRISE.md            par où commencer quand on reprend le projet
 sources.py                     chemins des fichiers sources, lus dans sources.env
 sources.example.env            modèle de sources.env, à copier sur chaque poste
 
