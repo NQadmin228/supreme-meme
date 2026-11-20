@@ -360,6 +360,7 @@ les annoncer avant toute présentation.
 | `INCOHERENCE : … Arret` | une source contredit une autre | lire le message, corriger la source ; ne pas affaiblir l'invariant |
 | « deux candidats » pour un export | deux exports du même rapport dans le dossier | ne garder que le bon |
 | « Classeur non modifié : … » (41) | une extension Excel serait perdue, ou le classeur est ouvert | lire le message ; fermer Excel ; ne jamais contourner |
+| `60_publier_donnees.py` : « An Application Control policy has blocked this file » (psycopg) | le poste refuse la DLL de psycopg | publier avec Node, mêmes garanties : `npm ci` puis `node base/publier.mjs [taboo\|amnesia] [--essai]` depuis `taboo-vercel/` |
 | `ModuleNotFoundError: pandas` | ancien script lancé | utiliser `21_extraction_taboo.py`, pas `20_extraction_v2.py` |
 | Jeu refusé, « au-delà de 4,0 Mo » | un jeu a trop grossi | le découper davantage dans `22_decouper.py` |
 | Plus personne ne peut se connecter | dernier administrateur perdu | `node base/init.mjs --admin <identifiant> --nom "<Nom>"` depuis `taboo-vercel/` (voir son LISEZ-MOI) |
