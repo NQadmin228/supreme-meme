@@ -54,6 +54,44 @@ mentent pas. Ne jamais reintroduire « HT » ou « TTC » dans le modele :
 ce pays n'applique pas de TVA sur ces tickets, les deux colonnes sont
 egales dans le resume, et le nom ne designe que le moment ou la remise
 s'applique.
+
+LES RAPPORTS MENSUELS
+---------------------
+Apres l'export historique, la caisse ne livre plus qu'un « rapport
+mensuel » par mois, au meme format que celui de TABOO : journal CAF,
+journal de vente, etats par famille, des depenses et des reglements.
+Ils se rangent sous AMNESIA_RAPPORTS_MENSUELS (facultatif) : un dossier
+qui contient lui-meme un journal de vente est un lot, sinon chacun de
+ses sous-dossiers qui en contient un.
+
+Ce qu'on en tire :
+  la serie journaliere   <- le journal CAF. Memes colonnes que le
+                            Journal du CAF de l'export : la meme regle
+                            s'applique, sans conversion.
+  le detail par produit  <- le journal de vente, regroupe par nuit. Sa
+                            date est deja celle sous laquelle le journal
+                            CAF range la nuit -- une vente de 3 h n'y
+                            change pas de jour. Verifie sur le premier
+                            lot : regrouper sur cette date redonne le
+                            journal CAF nuit par nuit, a un ecart de
+                            remise pres ; couper a 14 h comme TABOO ne
+                            redonne rien.
+  les offerts            <- les lignes du journal de vente a CA nul.
+                            Elles n'ont ni prix, ni caissier, ni ticket :
+                            valorisees au prix de vente habituel de
+                            l'article, caissier « (non renseigne) ».
+
+Ce qu'on n'en tire pas : le profil horaire, les caissiers, les moyens de
+reglement, le nombre de paniers et le resume du logiciel restent ceux de
+l'export. Le rapport ne les donne pas sous la meme forme, et les
+completer a moitie donnerait des totaux qui melangent deux perimetres.
+Le panier moyen se calcule donc sur le CA de l'export seul
+(`ca_net_paniers`), et les controles du resume ne portent que sur
+l'export : un mois de plus les mettrait en ecart sans qu'aucune source
+soit fausse. Chaque lot a ses propres controles (`controles_mensuels`).
+
+Un lot qui recouvre une nuit deja chargee est refuse : une nuit comptee
+deux fois fausse tout sans rien signaler.
 """
 
 import csv
@@ -70,11 +108,11 @@ import unicodedata
 # lecture, et le message d'erreur ne le dit pas.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-from collections import defaultdict
-from datetime import datetime, date
+from collections import Counter, defaultdict
+from datetime import datetime, date, timedelta
 from pathlib import Path
 
-from sources import source
+from sources import configure, source, trouver
 
 BASE = Path(__file__).resolve().parent
 SORTIE = BASE / "data_amnesia.json"
@@ -196,6 +234,27 @@ def cles_valeurs(lignes):
 
 # ---------------------------------------------------------------- extraction
 
+def nuit_caf(r):
+    """Une ligne du journal CAF -- celui de l'export comme celui du
+    rapport mensuel, qui portent les memes colonnes.
+
+    Noms d'origine : HT = brut, TTC = net apres remise. Voir l'en-tete."""
+    d = jour(r.get("date"))
+    if not d:
+        return None
+    return {
+        # « d » et non « jour » : inRange(), sums() et groupBy() du
+        # chassis filtrent sur ce nom. S'en ecarter obligerait a
+        # dupliquer ces trois fonctions pour un seul etablissement.
+        "d": d.isoformat(),
+        "brut": nombre(r.get("ht")),
+        "remise": nombre(r.get("remise")),
+        "net": nombre(r.get("ttc")),
+        "offerts_qte": int(nombre(r.get("offert"))),
+        "offerts_valeur": nombre(r.get("ca offert")),
+    }
+
+
 def extraire(dossier):
     print(f"\nLecture de {dossier}\n")
     sources = {}
@@ -211,24 +270,7 @@ def extraire(dossier):
         print(f"  {role:<14} {nom}")
 
     # ---- 1. La serie journaliere, source de verite du chiffre ----
-    # Noms d'origine : HT = brut, TTC = net apres remise. Voir l'en-tete.
-    jours = []
-    for r in caf:
-        d = jour(r.get("date"))
-        if not d:
-            continue
-        jours.append({
-            # « d » et non « jour » : inRange(), sums() et groupBy() du
-            # chassis filtrent sur ce nom. S'en ecarter obligerait a
-            # dupliquer ces trois fonctions pour un seul etablissement.
-            "d": d.isoformat(),
-            "brut": nombre(r.get("ht")),
-            "remise": nombre(r.get("remise")),
-            "net": nombre(r.get("ttc")),
-            "offerts_qte": int(nombre(r.get("offert"))),
-            "offerts_valeur": nombre(r.get("ca offert")),
-        })
-    jours.sort(key=lambda x: x["d"])
+    jours = sorted(filter(None, map(nuit_caf, caf)), key=lambda x: x["d"])
 
     # ---- 2. Le detail par categorie et produit ----
     # Ici « TTC » est le brut et « Total HT » le net : convention inverse
@@ -393,10 +435,212 @@ def controler(x):
     }
 
 
+# ---------------------------------------------------------------- rapports mensuels
+
+def lots_mensuels():
+    """Les dossiers de rapports mensuels configures, chacun lu en entier.
+
+    Meme regle que TABOO : un dossier qui contient lui-meme un « journal
+    de vente » est un lot ; sinon, chacun de ses sous-dossiers qui en
+    contient un en est un."""
+    if not configure("AMNESIA_RAPPORTS_MENSUELS"):
+        return []
+    racine = source("AMNESIA_RAPPORTS_MENSUELS", dossier=True)
+    a_un_journal = lambda d: any("journal de vente" in _sans_accents(p.name)
+                                 for p in d.glob("*.csv"))
+    dossiers = [racine] if a_un_journal(racine) else sorted(
+        d for d in racine.iterdir() if d.is_dir() and a_un_journal(d))
+    lots = []
+    for d in dossiers:
+        lot = {"dossier": d, "fichiers": {}}
+        # trouver() refuse deux fichiers differents pour un meme rapport,
+        # mais accepte le « journal de vente » et le « journal de vente
+        # date » que le logiciel sort a l'identique.
+        for nom, fragment in (("caf", "journal CAF"), ("ventes", "journal de vente"),
+                              ("famille", "états par famille")):
+            chemin = trouver(d, fragment)
+            with io.open(chemin, encoding="utf-8-sig", newline="") as f:
+                lecteur = csv.DictReader(f, delimiter=";")
+                lignes = list(lecteur)
+                lot[nom] = _normaliser_lignes(lignes, list(lecteur.fieldnames or []),
+                                              chemin.name)
+            lot["fichiers"][nom] = chemin.name
+        lots.append(lot)
+    return lots
+
+
+def lignes_de_vente(lot):
+    """Le journal de vente du lot, une ligne par vente, CA nul = offert."""
+    out = []
+    for r in lot["ventes"]:
+        if (r.get("type") or "").strip().upper() == "TOTAL":
+            continue
+        d = jour(r.get("date"))
+        if not d:
+            continue
+        net, remise = nombre(r.get("caf")), nombre(r.get("remise"))
+        out.append({
+            "d": d.isoformat(),
+            "type": (r.get("type") or "").strip(),
+            "categorie": (r.get("categorie") or "").strip(),
+            "produit": (r.get("articles") or "").strip(),
+            "pu": nombre(r.get("pu")),
+            "qte": nombre(r.get("qte")),
+            # CAF est le CA NET de la ligne ; le brut se reconstitue.
+            "net": net, "remise": remise, "brut": net + remise,
+            "offert": net == 0,
+        })
+    return out
+
+
+def prix_habituels(lots_lignes, offerts_export):
+    """Le prix de vente le plus frequent de chaque article.
+
+    Les lignes offertes du rapport mensuel arrivent avec un prix nul. On
+    les valorise comme le logiciel valorisait celles de l'export : au
+    prix de vente de l'article. D'abord le prix le plus pratique (au sens de pratiqué) dans les
+    rapports eux-memes, a defaut celui des offerts de l'export."""
+    vus = defaultdict(Counter)
+    for lignes in lots_lignes:
+        for r in lignes:
+            if r["pu"] > 0 and not r["offert"]:
+                vus[r["produit"]][r["pu"]] += 1
+    prix = {a: c.most_common(1)[0][0] for a, c in vus.items()}
+    for o in offerts_export:
+        a = o["article"].strip()
+        if a not in prix and o["qte"]:
+            vus[a][o["valeur"] / o["qte"]] += 1
+    for a, c in vus.items():
+        prix.setdefault(a, c.most_common(1)[0][0])
+    return prix
+
+
+def ajouter_lots(x, lots):
+    """Verse les rapports mensuels dans les series de l'export.
+
+    Renvoie ce qu'il faut en dire : les lots, leurs controles, les
+    alertes. Les series de l'export sont ETENDUES, jamais modifiees."""
+    info = {"lots": [], "controles": [], "alertes": []}
+    if not lots:
+        return info
+
+    couvertes = {j["d"] for j in x["jours"]}
+    fin_export = max(couvertes)
+    for lot in lots:
+        lot["nuits"] = [n for n in map(nuit_caf, lot["caf"]) if n]
+        lot["lignes"] = lignes_de_vente(lot)
+        dates = {n["d"] for n in lot["nuits"]} | {r["d"] for r in lot["lignes"]}
+        deja = sorted(dates & couvertes)
+        if deja:
+            raise SystemExit(
+                f"INCOHERENCE : {lot['dossier'].name} recouvre des nuits deja chargees "
+                f"({deja[0]}...) : une nuit comptee deux fois fausserait tout. Arret.")
+        couvertes |= dates
+        lot["debut"], lot["fin"] = min(dates), max(dates)
+
+    prix = prix_habituels([l["lignes"] for l in lots], x["offerts"])
+    sans_prix = 0
+    for lot in sorted(lots, key=lambda l: l["debut"]):
+        mois = lot["fin"][:7]
+        x["jours"].extend(lot["nuits"])
+
+        detail = defaultdict(lambda: {"qte_vendue": 0.0, "qte_offerte": 0.0,
+                                      "qte_totale": 0.0, "brut": 0.0,
+                                      "remise": 0.0, "net": 0.0})
+        valeur_offerte, qte_offerte = 0.0, 0.0
+        for r in lot["lignes"]:
+            ligne = detail[(r["d"], r["type"], r["categorie"], r["produit"])]
+            ligne["qte_offerte" if r["offert"] else "qte_vendue"] += r["qte"]
+            ligne["qte_totale"] += r["qte"]
+            for k in ("brut", "remise", "net"):
+                ligne[k] += r[k]
+            if r["offert"] and r["qte"]:
+                p = prix.get(r["produit"], 0)
+                sans_prix += not p
+                valeur_offerte += r["qte"] * p
+                qte_offerte += r["qte"]
+                x["offerts"].append({
+                    "d": r["d"], "categorie": r["categorie"], "article": r["produit"],
+                    "client": "", "caissier": "(non renseigne)", "ticket": "",
+                    "qte": r["qte"], "valeur": r["qte"] * p,
+                })
+        x["detail"].extend({"d": d, "type": t, "categorie": c, "produit": p, **v}
+                           for (d, t, c, p), v in detail.items())
+
+        # ---- les controles du lot, sur ses seuls rapports ----
+        net_caf = sum(n["net"] for n in lot["nuits"])
+        net_vente = sum(r["net"] for r in lot["lignes"])
+        net_famille = sum(nombre(r.get("total ht")) for r in lot["famille"])
+        remise_caf = sum(n["remise"] for n in lot["nuits"])
+        remise_vente = sum(r["remise"] for r in lot["lignes"])
+        off_qte_caf = sum(n["offerts_qte"] for n in lot["nuits"])
+        off_val_caf = sum(n["offerts_valeur"] for n in lot["nuits"])
+
+        def ctrl(nom, a, b, explication):
+            info["controles"].append({"mois": mois, "controle": nom, "a": a, "b": b,
+                                      "ecart": a - b, "concorde": abs(a - b) < 1,
+                                      "explication": explication})
+        F = lambda v: f"{v:,.0f}".replace(",", " ")
+        ctrl("CA net : journal de vente contre journal CAF", net_vente, net_caf,
+             f"Les deux journaux ne comptent pas la remise de la meme facon : "
+             f"{F(remise_vente)} F au journal de vente, {F(remise_caf)} F au journal "
+             f"CAF -- la meme divergence que les trois totaux de remise de l'export, "
+             f"et rien dans le rapport ne dit laquelle fait foi. La serie journaliere "
+             f"retient le journal CAF, comme pour l'export ; seul le detail par "
+             f"produit porte cet ecart.")
+        ctrl("CA net : journal de vente contre etats par famille", net_vente, net_famille,
+             "Deux rapports du meme mois doivent porter le meme CA net.")
+        ctrl("Articles offerts : lignes a CA nul contre journal CAF",
+             qte_offerte, off_qte_caf,
+             "Les lignes a CA nul du journal de vente doivent redonner le nombre "
+             "d'articles offerts du journal CAF.")
+        ctrl("Valeur offerte : lignes valorisees contre journal CAF",
+             valeur_offerte, off_val_caf,
+             "Les lignes offertes n'ont pas de prix : elles sont valorisees au prix "
+             "de vente habituel de l'article. La serie journaliere retient le CA "
+             "offert du journal CAF ; seul le detail par article porte cet ecart.")
+
+        info["lots"].append({"mois": mois, "debut": lot["debut"], "fin": lot["fin"],
+                             "dossier": lot["dossier"].name, "fichiers": lot["fichiers"],
+                             "ca_net": net_caf})
+
+    x["jours"].sort(key=lambda j: j["d"])
+
+    # ---- ce qu'il faut dire au lecteur ----
+    fmt = lambda s: date.fromisoformat(s).strftime("%d/%m/%Y")
+    precedent = fin_export
+    for l in info["lots"]:
+        # Le rapport couvre son mois entier : une nuit sans vente au debut
+        # du mois est une nuit fermee, pas une donnee manquante.
+        trou_debut = date.fromisoformat(precedent) + timedelta(days=1)
+        trou_fin = date.fromisoformat(l["mois"] + "-01") - timedelta(days=1)
+        if trou_debut <= trou_fin:
+            info["alertes"].append({"gravite": "warn", "titre":
+                f"Aucune donnee du {trou_debut:%d/%m/%Y} au {trou_fin:%d/%m/%Y}",
+                "corps": f"Les donnees s'arretent le {fmt(precedent)} et reprennent le "
+                         f"{fmt(l['debut'])} avec le rapport mensuel {l['mois']}. Les "
+                         f"totaux d'une periode qui chevauche ce trou sont incomplets."})
+        precedent = max(precedent, l["fin"])
+    info["alertes"].append({"gravite": "good", "titre":
+        "Mois issus d'un rapport mensuel : offerts sans caissier ni ticket",
+        "corps": "Les articles offerts viennent des lignes a CA nul du journal de vente, "
+                 "valorisees au prix de vente habituel de l'article. Le caissier qui "
+                 "offre et le ticket n'y sont pas connus"
+                 + (f" ; {sans_prix} ligne(s) sans prix connu valent 0." if sans_prix
+                    else ".")})
+    info["alertes"].append({"gravite": "good", "titre":
+        f"Profil horaire, caissiers, reglements et paniers arretes au {fmt(fin_export)}",
+        "corps": "Le rapport mensuel ne les fournit pas sous la meme forme : ils restent "
+                 "ceux de l'export Infogest, et le panier moyen se calcule sur le chiffre "
+                 "d'affaires de cet export seul."})
+    return info
+
+
 # ---------------------------------------------------------------- assemblage
 
-def construire(x):
-    ctrl = controler(x)
+def construire(x, ctrl, export, mensuel):
+    """`ctrl` et `export` portent sur l'export Infogest seul, `mensuel`
+    sur les rapports mensuels qui le prolongent."""
     jours = x["jours"]
     net = sum(j["net"] for j in jours)
     brut = sum(j["brut"] for j in jours)
@@ -437,7 +681,8 @@ def construire(x):
         c = offerts_par_caissier[o["caissier"]]
         c["valeur"] += o["valeur"]
         c["qte"] += o["qte"]
-        c["tickets"].add(o["ticket"])
+        if o["ticket"]:     # vide pour les offerts d'un rapport mensuel
+            c["tickets"].add(o["ticket"])
 
     for c in offerts_par_caissier.values():
         c["tickets"] = len(c["tickets"])
@@ -452,8 +697,14 @@ def construire(x):
             "periode_fin": jours[-1]["d"] if jours else None,
             "jours_exploitation": len(jours),
             "genere_le": datetime.now().strftime("%d/%m/%Y %H:%M"),
-            "source": "Exports Infogest (CSV)",
+            "source": "Exports Infogest (CSV)"
+                      + "".join(f" + rapport mensuel {l['mois'][5:]}-{l['mois'][:4]}"
+                                for l in mensuel["lots"]),
             "sources_fichiers": x["sources"],
+            "export_fin": export["fin"],
+            "rapports_mensuels": mensuel["lots"],
+            # Lues par la page « Ecarts et controles », comme les controles.
+            "alertes": mensuel["alertes"],
 
             # LE champ qui commande la moitie de l'interface. Les pages de
             # marge, de cout de revient et de resultat se lisent dessus
@@ -479,8 +730,13 @@ def construire(x):
             "ca_potentiel": net + offerts_val,
             "qte_vendue": qte_vendue,
             "qte_totale": qte_totale,
+            # Le nombre de paniers vient du resume de l'export : il se
+            # rapporte au CA de l'export, pas au CA qui inclut les mois
+            # venus d'un rapport mensuel. Voir l'en-tete.
             "paniers": paniers,
-            "panier_moyen": (net / paniers) if paniers else 0,
+            "ca_net_paniers": export["ca_net"],
+            "paniers_au": export["fin"],
+            "panier_moyen": (export["ca_net"] / paniers) if paniers else 0,
             "part_offerts_sur_net": (offerts_val / net) if net else 0,
             "part_offerts_sur_potentiel":
                 (offerts_val / (net + offerts_val)) if (net + offerts_val) else 0,
@@ -506,6 +762,7 @@ def construire(x):
         "offerts_jour": x["offerts"],
         "detail_jour": x["detail"],
         "controles": ctrl,
+        "controles_mensuels": mensuel["controles"],
         "resume_logiciel": x["resume"],
     }
 
@@ -518,7 +775,18 @@ def principal():
     if not dossier.is_dir():
         raise SystemExit(f"Dossier introuvable : {dossier}")
 
-    donnees = construire(extraire(dossier))
+    x = extraire(dossier)
+    # Les controles et le CA de l'export se figent AVANT d'y verser les
+    # rapports mensuels : le resume du logiciel ne couvre que l'export.
+    ctrl = controler(x)
+    export = {"fin": max(j["d"] for j in x["jours"]),
+              "ca_net": sum(j["net"] for j in x["jours"])}
+    lots = lots_mensuels()
+    mensuel = ajouter_lots(x, lots)
+    for l in mensuel["lots"]:
+        print(f"  + rapport mensuel {l['mois']} ({l['dossier']}) : "
+              f"{l['debut']} -> {l['fin']}")
+    donnees = construire(x, ctrl, export, mensuel)
     SORTIE.write_text(json.dumps(donnees, ensure_ascii=False, indent=1),
                       encoding="utf-8")
 
@@ -535,7 +803,7 @@ def principal():
     print(f"  articles offerts  {F(t['offerts_qte']):>16}"
           f"      soit {t['part_articles_offerts']*100:.1f} % des articles sortis")
     print(f"  panier moyen      {F(t['panier_moyen']):>16} CFA"
-          f"   sur {F(t['paniers'])} paniers")
+          f"   sur {F(t['paniers'])} paniers (export, au {t['paniers_au']})")
     print(f"  categories        {len(donnees['ventes_categorie']):>16}")
     print(f"  produits          {len(donnees['ventes_produit']):>16}")
 
@@ -548,6 +816,11 @@ def principal():
     r = donnees["controles"]["remises"]
     print(f"    remises : journal {F(r['journal'])} · detail {F(r['detail'])}"
           f" · resume {F(r['resume'])}")
+    for c in donnees["controles_mensuels"]:
+        etat = "concorde" if c["concorde"] else f"ecart de {F(c['ecart'])}"
+        print(f"    {c['mois']}  {c['controle']:<55} {etat}")
+    for a in m["alertes"]:
+        print(f"    ALERTE : {a['titre']}")
 
     print(f"\n  couts d'achat     ABSENTS — ni marge ni resultat")
     print(f"\n  {SORTIE.name}  {SORTIE.stat().st_size/1024:.0f} Ko\n")

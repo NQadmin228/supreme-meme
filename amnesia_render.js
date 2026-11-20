@@ -32,6 +32,16 @@ const KEYS_JOUR = ['brut', 'remise', 'net', 'offerts_valeur', 'offerts_qte'];
 
 function joursPeriode(){ return inRange(DATA.resultat_jour, state.start, state.end); }
 
+/* Le CA de l'export Infogest seul. Paniers, caissiers et reglements n'y
+   sont connus que sur ce perimetre : un rapport mensuel ne les donne pas.
+   Les rapporter au CA qui inclut ces mois ferait baisser leurs parts sans
+   qu'aucun d'eux ait change. */
+const caExport = () => DATA.totaux.ca_net_paniers ?? DATA.totaux.ca_net;
+
+/* Les offerts d'un rapport mensuel n'ont pas de ticket : un ticket vide
+   ne se compte pas comme un ticket. */
+const nbTickets = off => new Set(off.map(o => o.ticket).filter(Boolean)).size;
+
 /* Les jeux lourds ne sont pas dans le socle : cette fonction est celle
    du chassis, appelee par les pages qui en ont besoin. */
 function detailPeriode(){
@@ -89,8 +99,13 @@ RENDER['synthese'] = function(){
     tuile({k:'CHIFFRE POTENTIEL', v:Fc(potentiel), u:'F',
            part:{v:potentiel, total:potentiel, c:'var(--ink-faint)'},
            d:'la référence des deux barres ci-contre — si rien n\'avait été offert'}),
-    tuile({k:'PANIER MOYEN', v:F(paniers ? DATA.totaux.ca_net/paniers : 0), u:'F',
-           d:F(paniers)+' paniers sur la période complète'}),
+    /* Le nombre de paniers vient du resume de l'export Infogest : il se
+       divise par le CA de cet export, pas par celui qui inclut les mois
+       venus d'un rapport mensuel. */
+    tuile({k:'PANIER MOYEN', v:F(paniers ? caExport()/paniers : 0), u:'F',
+           d:F(paniers)+' paniers sur '+(DATA.totaux.paniers_au
+             ? 'l\'export, jusqu\'au '+dateLabel(DATA.totaux.paniers_au)
+             : 'la période complète')}),
   ].join('');
 
   /* Le constat d'ouverture. Ce n'est pas un commentaire decoratif : sur
@@ -281,7 +296,7 @@ RENDER['offerts'] = function(){
   const t = sums(j, KEYS_JOUR);
   const potentiel = t.net + t.offerts_valeur;
 
-  const tickets = new Set(off.map(o=>o.ticket)).size;
+  const tickets = nbTickets(off);
 
   document.getElementById('of-kpi').innerHTML = [
     tuile({k:'VALEUR OFFERTE', v:Fc(t.offerts_valeur), u:'F', hero:true, cls:'crit',
@@ -296,7 +311,12 @@ RENDER['offerts'] = function(){
            part:{v:tickets, total:DATA.totaux.paniers, c:'var(--accent)'},
            d:F1(PCT(tickets, DATA.totaux.paniers))+' % des '
              +F(DATA.totaux.paniers)+' paniers'}),
-    tuile({k:'OFFERT PAR TICKET CONCERNÉ', v:F(tickets ? t.offerts_valeur/tickets : 0), u:'F',
+    /* Sur les seuls offerts qui ont un ticket : ceux d'un rapport mensuel
+       n'en ont pas, et leur valeur gonflerait la moyenne sans ticket en
+       face. Sur l'export, cette somme egale la valeur du journal. */
+    tuile({k:'OFFERT PAR TICKET CONCERNÉ',
+           v:F(tickets ? off.filter(o => o.ticket).reduce((s, o) => s + o.valeur, 0)/tickets : 0),
+           u:'F',
            d:'valeur moyenne donnée quand il y a un geste'}),
   ].join('');
 
@@ -447,8 +467,8 @@ const SEUIL_COMPARAISON = 0.05;
 
 function constatCaissiers(compares){
   const significatifs = compares.filter(
-    c => c.net >= SEUIL_COMPARAISON * DATA.totaux.ca_net);
-  const dominant = compares.find(c => c.net >= 0.8 * DATA.totaux.ca_net);
+    c => c.net >= SEUIL_COMPARAISON * caExport());
+  const dominant = compares.find(c => c.net >= 0.8 * caExport());
 
   if(significatifs.length >= 2){
     return constat('warn', "Le taux d'offert varie d'un caissier à l'autre",
@@ -470,10 +490,10 @@ function constatCaissiers(compares){
     .reduce((a, b) => (b.net > (a ? a.net : -1) ? b : a), null);
   return constat('warn', "L'activité est concentrée sur un seul poste",
     `${dominant.nom} réalise
-     <b>${F1(PCT(dominant.net, DATA.totaux.ca_net))} %</b> du chiffre et offre
+     <b>${F1(PCT(dominant.net, caExport()))} %</b> du chiffre et offre
      <b>${F1(dominant.ratio*100)} %</b> de ce qu'il encaisse.
      <br><br>Aucun autre caissier n'a un volume comparable — le suivant pèse
-     ${F1(PCT(suivant ? suivant.net : 0, DATA.totaux.ca_net))} % du chiffre.
+     ${F1(PCT(suivant ? suivant.net : 0, caExport()))} % du chiffre.
      Rapprocher leurs pourcentages produirait un écart spectaculaire et sans
      portée : un taux calculé sur vingt tickets ne se compare pas à un taux
      calculé sur cinq mille. Le tableau ci-dessous donne les volumes en regard ;
@@ -486,7 +506,7 @@ RENDER['offerts-qui'] = function(){
   const compares = comparerCaissiers();
   const totNet = compares.reduce((a, b) => a + b.net, 0);
   const totOff = compares.reduce((a, b) => a + b.offert, 0);
-  const tickets = new Set(off.map(o => o.ticket)).size;
+  const tickets = nbTickets(off);
   const tous = (DATA.caissiers || []).length;
 
   document.getElementById('oq-kpi').innerHTML = [
@@ -554,7 +574,7 @@ RENDER['offerts-qui'] = function(){
     [{t:'Nuit'},{t:'Catégorie'},{t:'Article'},{t:'Caissier'},
      {t:'Ticket',num:true},{t:'Qté',num:true},{t:'Valeur',num:true}],
     lignes.map(o => [dateLabel(o.d), o.categorie, o.article, o.caissier,
-                     o.ticket, F(o.qte), F(o.valeur)]));
+                     o.ticket || '—', F(o.qte), F(o.valeur)]));
   rendreFiltrable('oq-detail', 'Filtrer : un article, un caissier, une date…');
 };
 
@@ -1922,6 +1942,20 @@ function anomalies(){
       montant: (rem.resume || 0) - (rem.journal || 0),
       effet: (rem.note || '') + ' ' + (rem.lecture_plausible || ''),
     });
+  }
+
+  // --- les rapports mensuels qui prolongent l'export --------------------
+  // Meme section que les exports : c'est la meme caisse, sous une autre
+  // forme. Un controle qui concorde ne fait pas une anomalie.
+  for(const m of (DATA.controles_mensuels || [])){
+    if(m.concorde) continue;
+    out.push({origine: 'Exports de caisse', gravite: 'warn',
+              titre: `${m.controle} (rapport mensuel ${m.mois})`,
+              montant: m.ecart, effet: m.explication});
+  }
+  for(const a of (DATA.meta.alertes || [])){
+    out.push({origine: 'Exports de caisse', gravite: a.gravite,
+              titre: a.titre, montant: null, effet: a.corps});
   }
 
   // --- dans le classeur d'exploitation ---------------------------------

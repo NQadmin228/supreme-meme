@@ -139,7 +139,8 @@ classeur du contrôle de gestion ◄──────► 41_controle_achats.py 
 ### AMNESIA
 
 ```
-exports Infogest (CSV) ──► 30_extraction_amnesia.py ──► data_amnesia.json
+exports Infogest (CSV) ──┐
+rapports mensuels (CSV) ─┴► 30_extraction_amnesia.py ──► data_amnesia.json
 classeur mensuel (xlsx) ─► 32_extraction_mensuel_amnesia.py ──► data_mensuel_amnesia.json
 coûts de revient (CSV) ──► 33_couts_amnesia.py ──► data_couts_amnesia.json
                            31_decouper_amnesia.py ──► taboo-vercel/donnees/amnesia/
@@ -199,6 +200,12 @@ qu'il fait. C'est la documentation de référence : le lire avant de modifier.
    page « Qualité des données » et le bas de la page « Achats matière ».
 
 ### AMNESIA
+
+Déposer le rapport mensuel de caisse (même format que celui de TABOO) dans
+un **sous-dossier du mois** sous `AMNESIA_RAPPORTS_MENSUELS`, et mettre à
+jour le classeur de suivi (`AMNESIA_CLASSEUR`). Profil horaire, caissiers,
+règlements et paniers restent ceux de l'export Infogest : le rapport ne les
+fournit pas (voir l'en-tête de `30_extraction_amnesia.py`).
 
 ```bash
 python 30_extraction_amnesia.py
